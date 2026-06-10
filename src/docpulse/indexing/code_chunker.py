@@ -29,9 +29,8 @@ def chunk_source(path: str, source: str) -> list[CodeChunk]:
                 if kind == "function" and name_stack and name_stack[-1][1] == "class":
                     kind = "method"
                 qualified = ".".join([s[0] for s in name_stack] + [name])
-                # Bug 2: if this definition node is wrapped in a decorated_definition,
-                # use the parent's byte range and start_position for content/start_line,
-                # but derive signature from the inner def's own first content line.
+                # Decorated definitions: take content and start from the decorated_definition
+                # parent so decorators are included; signature stays the inner definition's first line.
                 parent = node.parent()
                 if parent is not None and parent.kind() == "decorated_definition":
                     outer_br = parent.byte_range()
