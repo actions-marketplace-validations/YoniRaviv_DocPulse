@@ -1,0 +1,6 @@
+model: test/fake
+docs:
+  - path: "docs/**/*.md"
+  - path: "README.md"
+code:
+  include: ["src/**"]
