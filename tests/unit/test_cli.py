@@ -27,3 +27,19 @@ def test_index_command_heuristics_only(tmp_path):
     assert any("auth.md" in s for s in linked_sections)
     assert any("pricing.md" in s for s in linked_sections)
     assert "chunks" in result.output  # summary line printed
+
+
+def test_symbol_free_section_is_not_heuristically_linked(tmp_path):
+    """Documents the known Phase 1 limitation that motivates embedding linking.
+
+    behavior.md describes formatPrice without naming it -> heuristics can't link it.
+    This is the gap embedding links close; recall on real repos is measured in Phase 2+.
+    """
+    import shutil
+
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURE, repo)
+    runner.invoke(app, ["index", "--root", str(repo), "--heuristics-only", "--base-commit", "x"])
+    index = load_index(repo / ".docpulse" / "index.json")
+    behavior_links = [link for link in index.links if "behavior.md" in link.section_id]
+    assert behavior_links == []  # known gap, embedding linking required
