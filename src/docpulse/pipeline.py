@@ -142,6 +142,8 @@ def _repair_stale(
             continue
         if verdict.confidence < config.confidence.flag_threshold:
             continue
+        # Invariant: every verdict.section_id is a key in suspects_by_id — both
+        # are derived from the same `suspects` list produced by select_suspects.
         suspect = suspects_by_id[verdict.section_id]
         old_code, new_code = _seed_code(root, base, head, suspect)
         bundle = RepairBundle(
