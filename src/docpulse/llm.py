@@ -29,8 +29,11 @@ class LLMClient:
 
         Accumulates token usage. Wraps any provider exception in LLMError.
         """
+        kwargs: dict[str, Any] = {"model": self.model, "messages": messages}
+        if tools is not None:
+            kwargs["tools"] = tools
         try:
-            response = litellm.completion(model=self.model, messages=messages, tools=tools)
+            response = litellm.completion(**kwargs)
         except Exception as exc:  # noqa: BLE001 — normalize every provider failure
             raise LLMError(str(exc)) from exc
         usage = getattr(response, "usage", None)

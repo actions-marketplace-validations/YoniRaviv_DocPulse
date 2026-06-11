@@ -68,7 +68,7 @@ def test_provider_error_is_wrapped():
     client = LLMClient(model="m")
     with patch("docpulse.llm.litellm.completion") as mock:
         mock.side_effect = RuntimeError("503 from provider")
-        with pytest.raises(LLMError):
+        with pytest.raises(LLMError, match="503 from provider"):
             client.complete([{"role": "user", "content": "x"}])
 
 
