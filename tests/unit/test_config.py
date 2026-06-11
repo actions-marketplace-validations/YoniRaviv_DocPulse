@@ -1,4 +1,4 @@
-from docpulse.config import load_config
+from docpulse.config import Config, DocGlob, load_config
 
 YAML = """\
 model: anthropic/claude-sonnet-4-6
@@ -55,3 +55,22 @@ def test_negative_budget_rejected(tmp_path):
     )
     with pytest.raises(ValueError):
         load_config(config_file)
+
+
+def test_repair_model_defaults_to_none():
+    cfg = Config(docs=[DocGlob(path="docs/**/*.md")])
+    assert cfg.repair_model is None
+
+
+def test_resolve_repair_model_falls_back_to_model():
+    cfg = Config(docs=[DocGlob(path="d.md")], model="anthropic/big")
+    assert cfg.resolve_repair_model() == "anthropic/big"
+
+
+def test_resolve_repair_model_prefers_repair_model():
+    cfg = Config(
+        docs=[DocGlob(path="d.md")],
+        model="anthropic/big",
+        repair_model="anthropic/cheap",
+    )
+    assert cfg.resolve_repair_model() == "anthropic/cheap"

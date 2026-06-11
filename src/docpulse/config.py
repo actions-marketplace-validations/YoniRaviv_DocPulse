@@ -42,6 +42,7 @@ class BudgetConfig(BaseModel):
 
 class Config(BaseModel):
     model: str | None = None  # required for verify/repair; index/check run without it
+    repair_model: str | None = None  # optional override for repair/validate; falls back to model
     embedding_model: str = "openai/text-embedding-3-small"
     docs: list[DocGlob]
     code: CodeGlobs = CodeGlobs()
@@ -49,6 +50,10 @@ class Config(BaseModel):
     linking: LinkingConfig = LinkingConfig()
     budget: BudgetConfig = BudgetConfig()
     context: list[str] = ["git"]
+
+    def resolve_repair_model(self) -> str | None:
+        """Model used by the repairer/validator/rubric; falls back to `model`."""
+        return self.repair_model or self.model
 
 
 def load_config(path: Path) -> Config:
