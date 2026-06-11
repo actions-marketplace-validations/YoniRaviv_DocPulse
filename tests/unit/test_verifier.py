@@ -73,8 +73,6 @@ def _empty_index():
 
 
 def _bundle():
-    from docpulse.verification.verifier import VerifyBundle
-
     return VerifyBundle(
         section_id="docs/auth.md#login", doc_content="d",
         old_code="o", new_code="n", intent="",
@@ -140,7 +138,8 @@ def test_llm_error_yields_unverified(tmp_path):
     from docpulse.llm import LLMError
 
     class BoomClient:
-        calls = 0
+        def __init__(self):
+            self.calls = 0
 
         def complete(self, messages, tools=None):
             raise LLMError("boom")
@@ -157,3 +156,46 @@ def test_plain_text_response_gets_nudged_then_unverified(tmp_path):
     ])
     verdict = verify(client, tmp_path, _empty_index(), _bundle(), max_tool_calls=3)
     assert verdict.status == "unverified"
+
+
+def test_multi_call_turn_responds_to_every_tool_call(tmp_path):
+    # A turn where submit_verdict (malformed) is NOT last must still produce a
+    # role:tool response for every tool_call id, so the retry message list is valid.
+    (tmp_path / "x.py").write_text("hello\n")
+
+    class BadVerdict(FakeToolCall):
+        def __init__(self):
+            super().__init__("submit_verdict", {}, call_id="sv1")
+            self.function.arguments = "{bad json"
+
+    captured = {}
+
+    class CapturingClient:
+        def __init__(self, scripted):
+            self._scripted = list(scripted)
+            self.calls = 0
+
+        def complete(self, messages, tools=None):
+            self.calls += 1
+            if self.calls == 2:
+                captured["messages"] = list(messages)
+            return self._scripted.pop(0)
+
+    turn1 = FakeMessage(tool_calls=[
+        BadVerdict(),
+        FakeToolCall("read_file", {"path": "x.py", "start": 1, "end": 1}, call_id="rf1"),
+    ])
+    turn2 = FakeMessage(tool_calls=[FakeToolCall(
+        "submit_verdict",
+        {"status": "accurate", "confidence": 0.1, "diagnosis": "ok", "evidence": []},
+    )])
+    client = CapturingClient([turn1, turn2])
+    verdict = verify(client, tmp_path, _empty_index(), _bundle(), max_tool_calls=5)
+    assert verdict.status == "accurate"
+
+    msgs = captured["messages"]
+    tool_ids = {c.id for m in msgs if getattr(m, "tool_calls", None) for c in m.tool_calls}
+    responded = {m["tool_call_id"] for m in msgs
+                 if isinstance(m, dict) and m.get("role") == "tool"}
+    assert tool_ids == {"sv1", "rf1"}
+    assert tool_ids <= responded  # every tool_call got a response -> valid protocol

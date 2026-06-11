@@ -102,6 +102,7 @@ def verify(
             continue
 
         messages.append(message)  # assistant turn carrying the tool_calls
+        verdict: Verdict | None = None
         for call in tool_calls:
             name = call.function.name
             try:
@@ -110,24 +111,19 @@ def verify(
                 args = None
             if name == "submit_verdict":
                 if args is None:
-                    # Malformed verdict args: tell the model, let it retry within budget.
-                    messages.append({
-                        "role": "tool", "tool_call_id": call.id, "name": name,
-                        "content": "error: arguments were not valid JSON; resend.",
-                    })
-                    break  # re-enter the loop for a retry call
-                try:
-                    return _verdict_from_args(bundle.section_id, args)
-                except (KeyError, ValueError) as exc:
-                    messages.append({
-                        "role": "tool", "tool_call_id": call.id, "name": name,
-                        "content": f"error: {exc}; resend a valid verdict.",
-                    })
-                    break
+                    content = "error: arguments were not valid JSON; resend."
+                else:
+                    try:
+                        verdict = _verdict_from_args(bundle.section_id, args)
+                        content = "verdict received"
+                    except (KeyError, ValueError) as exc:
+                        content = f"error: {exc}; resend a valid verdict."
             else:
-                result = dispatch(name, args or {})
-                messages.append({
-                    "role": "tool", "tool_call_id": call.id, "name": name, "content": result,
-                })
+                content = dispatch(name, args or {})
+            messages.append({
+                "role": "tool", "tool_call_id": call.id, "name": name, "content": content,
+            })
+        if verdict is not None:
+            return verdict
 
     return _unverified(bundle.section_id, "tool-call budget exhausted without a verdict")
