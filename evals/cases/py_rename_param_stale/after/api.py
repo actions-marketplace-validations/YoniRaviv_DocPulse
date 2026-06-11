@@ -1,0 +1,3 @@
+def fetch(url, attempts):
+    """Fetch a URL, retrying on failure."""
+    ...

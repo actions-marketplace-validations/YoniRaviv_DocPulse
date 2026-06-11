@@ -1,0 +1,3 @@
+status: accurate
+intent: "Extract subtotal computation into private helper ComputeSubtotal; CalculateTotal signature and result unchanged."
+reference_correction: ""

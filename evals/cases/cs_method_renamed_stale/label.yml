@@ -1,0 +1,17 @@
+status: stale
+intent: "Rename GetUserById to FindById to align with repository naming conventions."
+reference_correction: |
+  # UserService
+
+  ## FindById
+
+  ```csharp
+  public User? FindById(int id)
+  ```
+
+  Returns the `User` with the given primary key, or `null` if no such user exists.
+
+  ```csharp
+  var user = userService.FindById(42);
+  if (user is null) return NotFound();
+  ```

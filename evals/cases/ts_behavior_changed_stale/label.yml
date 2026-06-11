@@ -1,0 +1,13 @@
+status: stale
+intent: "Change formatPrice() to always show two decimal places instead of rounding to whole dollars."
+reference_correction: |
+  # formatPrice
+
+  `formatPrice(amount)` converts a numeric amount to a display string.
+
+  It always shows **two decimal places** and prepends `$`:
+
+  ```
+  formatPrice(9.7)  // "$9.70"
+  formatPrice(4.3)  // "$4.30"
+  ```

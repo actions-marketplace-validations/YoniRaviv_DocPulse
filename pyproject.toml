@@ -34,6 +34,7 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+extend-exclude = ["evals"]  # eval-case fixtures are intentionally incomplete code; not linted
 
 [project.scripts]
 docpulse = "docpulse.cli:app"

@@ -1,0 +1,3 @@
+status: accurate
+intent: "Simplify average() using builtins; behavior unchanged."
+reference_correction: ""

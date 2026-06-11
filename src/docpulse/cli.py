@@ -7,8 +7,10 @@ from docpulse.config import load_config
 from docpulse.diffing.change_filter import meaningful_changed_chunks
 from docpulse.diffing.git_diff import diff_range
 from docpulse.diffing.suspects import select_suspects
+from docpulse.eval.harness import evaluate
 from docpulse.indexing.embeddings import Embedder
 from docpulse.indexing.index_store import build_index, load_index, save_index
+from docpulse.llm import LLMClient
 
 app = typer.Typer(
     help="DocPulse — docs that stay in sync with the heartbeat of the codebase.",
@@ -86,3 +88,47 @@ def check(
     for suspect in suspects:
         chunk_names = ", ".join(sc.chunk.name for sc in suspect.changed_chunks)
         typer.echo(f"  {suspect.section.id}  score={suspect.score:.2f}  changed: {chunk_names}")
+
+
+@app.command("eval")
+def eval_cmd(
+    cases: Path = typer.Option(Path("evals/cases"), "--cases", help="Eval cases directory"),
+    model: str | None = typer.Option(None, "--model", help="LiteLLM model (overrides config)"),
+    config_path: Path | None = typer.Option(None, "--config", help="Path to docpulse.yml"),
+    root: Path = typer.Option(Path("."), help="Repo root (for config lookup)"),
+    min_precision: float | None = typer.Option(
+        None, "--min-precision", help="Fail (exit 1) if precision is below this"
+    ),
+    max_tool_calls: int = typer.Option(10, help="Tool-call budget per case"),
+) -> None:
+    """Run the verifier over labeled eval cases and report precision/recall."""
+    chosen_model = model
+    if chosen_model is None:
+        cfg = config_path or root / "docpulse.yml"
+        if cfg.exists():
+            chosen_model = load_config(cfg).model
+    try:
+        client = LLMClient(chosen_model)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    if not cases.is_dir():
+        typer.echo(f"no cases directory: {cases}", err=True)
+        raise typer.Exit(2)
+
+    report = evaluate(client, cases, max_tool_calls)
+    typer.echo(f"{'case':<28} {'expected':<10} {'predicted':<11} conf")
+    for row in report.rows:
+        flag = "" if row.expected == row.predicted else "  <-- mismatch"
+        typer.echo(
+            f"{row.name:<28} {row.expected:<10} {row.predicted:<11} {row.confidence:.2f}{flag}"
+        )
+    typer.echo(
+        f"\nprecision={report.precision:.2f}  recall={report.recall:.2f}  "
+        f"(n={report.total}, tokens={client.tokens_used})"
+    )
+    if min_precision is not None and report.precision < min_precision:
+        typer.echo(
+            f"precision {report.precision:.2f} below gate {min_precision:.2f}", err=True
+        )
+        raise typer.Exit(1)
