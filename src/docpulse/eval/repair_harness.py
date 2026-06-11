@@ -157,7 +157,7 @@ def _run_case(client: Any, case: EvalCase, config: Config) -> RepairCaseResult:
         intent=case.intent,
     )
     proposed: Repair = repair(client, bundle)
-    validated = validate(client, proposed, bundle, min_preservation=0.0)
+    validated = validate(client, proposed, bundle)
     tier = route(verdict, validated, config)
     preservation = preservation_ratio(case.doc_content, validated.new_content)
     rubric = judge_repair(client, validated.new_content, _reference_correction(case))

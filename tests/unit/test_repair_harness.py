@@ -48,7 +48,7 @@ def _case(name="py_rename_param_stale"):
         path=None,
         expected_status="stale",
         intent="Rename the retries parameter to attempts.",
-        doc_content="Pass `retries` to control attempts.",
+        doc_content="Intro stays the same.\n\nPass `retries` to control attempts.",
         old_code="def run(retries): ...",
         new_code="def run(attempts): ...",
     )
@@ -100,11 +100,12 @@ def test_evaluate_repairs_over_one_stale_case(monkeypatch):
 
     monkeypatch.setattr(rh, "load_cases", lambda d: [_case()])
     monkeypatch.setattr(
-        rh, "_reference_correction", lambda case: "Pass `attempts` to control attempts."
+        rh, "_reference_correction",
+        lambda case: "Intro stays the same.\n\nPass `attempts` to control attempts.",
     )
 
     repair_msg = FakeMessage(tool_calls=[FakeToolCall("submit_repair", {
-        "new_content": "Pass `attempts` to control attempts.",
+        "new_content": "Intro stays the same.\n\nPass `attempts` to control attempts.",
         "rationale": "renamed retries->attempts", "confidence": 0.9,
     })])
     validation_msg = FakeMessage(tool_calls=[FakeToolCall("submit_validation", {
@@ -125,8 +126,9 @@ def test_evaluate_repairs_over_one_stale_case(monkeypatch):
     assert report.total == 1
     row = report.rows[0]
     assert row.name == "py_rename_param_stale"
-    assert row.tier == "auto_fix"          # validated + confidence 1.0
-    # The single original block is replaced, so it does NOT survive byte-identical:
-    assert row.preservation == 0.0
+    assert row.tier == "auto_fix"          # validated (0.5 preserved >= 0.5 gate) + confidence 1.0
+    # First paragraph survives byte-identical (1 of 2 blocks) -> preservation 0.5,
+    # which clears the 0.5 validation gate but not the 0.95 exit-report gate.
+    assert row.preservation == 0.5
     assert report.pct_preserved_95 == 0.0
     assert report.mean_accuracy == 5.0
