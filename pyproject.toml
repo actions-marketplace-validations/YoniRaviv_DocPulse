@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Docs that stay in sync with the heartbeat of the codebase"
 readme = "README.md"
 authors = [
-    { name = "YoniRaviv", email = "dekker320@gmail.com" }
+    { name = "YoniRaviv" }
 ]
 requires-python = ">=3.12"
 dependencies = [
