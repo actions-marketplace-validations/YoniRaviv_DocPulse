@@ -3,11 +3,12 @@ from pathlib import Path
 
 import typer
 
-from docpulse.config import load_config
+from docpulse.config import Config, DocGlob, load_config
 from docpulse.diffing.change_filter import meaningful_changed_chunks
 from docpulse.diffing.git_diff import diff_range
 from docpulse.diffing.suspects import select_suspects
 from docpulse.eval.harness import evaluate
+from docpulse.eval.repair_harness import evaluate_repairs
 from docpulse.indexing.embeddings import Embedder
 from docpulse.indexing.index_store import build_index, load_index, save_index
 from docpulse.llm import LLMClient
@@ -100,6 +101,9 @@ def eval_cmd(
         None, "--min-precision", help="Fail (exit 1) if precision is below this"
     ),
     max_tool_calls: int = typer.Option(10, help="Tool-call budget per case"),
+    repair: bool = typer.Option(
+        False, "--repair", help="Also run the repair eval (preservation + rubric)"
+    ),
 ) -> None:
     """Run the verifier over labeled eval cases and report precision/recall."""
     chosen_model = model
@@ -132,3 +136,37 @@ def eval_cmd(
             f"precision {report.precision:.2f} below gate {min_precision:.2f}", err=True
         )
         raise typer.Exit(1)
+
+    if repair:
+        repair_model = chosen_model
+        repair_cfg_path = config_path or root / "docpulse.yml"
+        if repair_cfg_path.exists():
+            repair_model = load_config(repair_cfg_path).resolve_repair_model() or chosen_model
+        repair_client = LLMClient(repair_model)
+        config = (
+            load_config(repair_cfg_path)
+            if repair_cfg_path.exists()
+            else Config(docs=[DocGlob(path="**/*.md")])
+        )
+        repair_report = evaluate_repairs(repair_client, cases, config)
+        typer.echo("\n--- repair eval (stale cases) ---")
+        typer.echo(f"{'case':<28} {'preserve':<9} {'tier':<9} acc/cmp/sty  flag")
+        for row in repair_report.rows:
+            r = row.rubric
+            flag = "FLAG" if r.needs_human_review else ""
+            typer.echo(
+                f"{row.name:<28} {row.preservation:<9.2f} {row.tier:<9} "
+                f"{r.accuracy}/{r.completeness}/{r.style_fidelity}        {flag}"
+            )
+        typer.echo(
+            f"\nmean preservation={repair_report.mean_preservation:.2f}  "
+            f">=95% preserved={repair_report.pct_preserved_95:.0%}  "
+            f"rubric acc={repair_report.mean_accuracy:.1f} "
+            f"cmp={repair_report.mean_completeness:.1f} "
+            f"sty={repair_report.mean_style_fidelity:.1f}  "
+            f"flagged={repair_report.n_flagged}  "
+            f"(repair tokens={repair_client.tokens_used})"
+        )
+        for row in repair_report.rows:
+            if row.diff:
+                typer.echo(f"\n# diff: {row.name}\n{row.diff}")
