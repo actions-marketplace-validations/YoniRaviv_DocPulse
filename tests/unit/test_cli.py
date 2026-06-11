@@ -79,7 +79,7 @@ def test_check_surfaces_linked_section_on_param_rename(tmp_path):
     auth.write_text(auth.read_text().replace("user: str", "username: str"))
     _git(repo, "commit", "-am", "rename login param")
 
-    result = runner.invoke(app, ["check", "--root", str(repo), "--base", base])
+    result = runner.invoke(app, ["check", "--root", str(repo), "--base", base, "--suspects-only"])
     assert result.exit_code == 0, result.output
     assert "docs/auth.md#authentication/login" in result.output
     assert "AuthService.login" in result.output
@@ -104,7 +104,7 @@ def test_check_comment_only_change_surfaces_nothing(tmp_path):
     )
     _git(repo, "commit", "-am", "comment only")
 
-    result = runner.invoke(app, ["check", "--root", str(repo), "--base", base])
+    result = runner.invoke(app, ["check", "--root", str(repo), "--base", base, "--suspects-only"])
     assert result.exit_code == 0, result.output
     assert "no suspect doc sections" in result.output
 
@@ -118,6 +118,6 @@ def test_check_without_index_exits_2(tmp_path):
 def test_check_bad_base_ref_exits_2_with_message(tmp_path):
     repo, base = _committed_fixture(tmp_path)
     runner.invoke(app, ["index", "--root", str(repo), "--heuristics-only", "--base-commit", base])
-    result = runner.invoke(app, ["check", "--root", str(repo), "--base", "no-such-ref"])
+    result = runner.invoke(app, ["check", "--root", str(repo), "--base", "no-such-ref", "--suspects-only"])
     assert result.exit_code == 2
     assert "no-such-ref" in result.output or "failed" in result.output

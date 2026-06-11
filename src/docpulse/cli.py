@@ -1,9 +1,13 @@
+import difflib
+import shlex
 import subprocess
 from pathlib import Path
 
 import typer
 
 from docpulse.config import Config, DocGlob, load_config
+from docpulse.context.git_context import GitContext
+from docpulse.destinations.repo_markdown import RepoMarkdownDestination
 from docpulse.diffing.change_filter import meaningful_changed_chunks
 from docpulse.diffing.git_diff import diff_range
 from docpulse.diffing.suspects import select_suspects
@@ -12,6 +16,7 @@ from docpulse.eval.repair_harness import evaluate_repairs
 from docpulse.indexing.embeddings import Embedder
 from docpulse.indexing.index_store import build_index, load_index, save_index
 from docpulse.llm import LLMClient
+from docpulse.pipeline import run_pipeline
 
 app = typer.Typer(
     help="DocPulse — docs that stay in sync with the heartbeat of the codebase.",
@@ -56,30 +61,7 @@ def index(
     )
 
 
-@app.command("check")
-def check(
-    base: str = typer.Option(..., "--base", help="Base git ref to diff against"),
-    head: str = typer.Option("HEAD", help="Head git ref"),
-    root: Path = typer.Option(Path("."), help="Repo root"),
-    config_path: Path | None = typer.Option(None, "--config", help="Path to docpulse.yml"),
-) -> None:
-    """Diff base..head and print doc sections suspected stale (no LLM yet)."""
-    index_path = root / ".docpulse" / "index.json"
-    if not index_path.exists():
-        typer.echo("no index found — run `docpulse index` first", err=True)
-        raise typer.Exit(2)
-    try:
-        config = load_config(config_path or root / "docpulse.yml")
-        index = load_index(index_path)
-        diffs = diff_range(root, base, head)
-        changed = meaningful_changed_chunks(root, diffs, config, base, head)
-    except FileNotFoundError as exc:
-        typer.echo(f"config not found: {exc.filename}", err=True)
-        raise typer.Exit(2) from exc
-    except RuntimeError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(2) from exc
-    suspects, total = select_suspects(changed, index, config.budget.max_suspects_per_run)
+def _print_suspects(suspects: list, total: int) -> None:
     if not suspects:
         typer.echo("no suspect doc sections")
         return
@@ -89,6 +71,134 @@ def check(
     for suspect in suspects:
         chunk_names = ", ".join(sc.chunk.name for sc in suspect.changed_chunks)
         typer.echo(f"  {suspect.section.id}  score={suspect.score:.2f}  changed: {chunk_names}")
+
+
+@app.command("check")
+def check(
+    base: str = typer.Option(..., "--base", help="Base git ref to diff against"),
+    head: str = typer.Option("HEAD", help="Head git ref"),
+    root: Path = typer.Option(Path("."), help="Repo root"),
+    config_path: Path | None = typer.Option(None, "--config", help="Path to docpulse.yml"),
+    model: str | None = typer.Option(None, "--model", help="LiteLLM model (overrides config)"),
+    suspects_only: bool = typer.Option(
+        False, "--suspects-only", help="LLM-less: just list suspect sections (no API key)"
+    ),
+    two_dot: bool = typer.Option(
+        False, "--two-dot", help="Diff literal base..head instead of merge-base base...head"
+    ),
+) -> None:
+    """Verify doc sections against base..head and report drift (exit 1 on stale)."""
+    index_path = root / ".docpulse" / "index.json"
+    if not index_path.exists():
+        typer.echo("no index found — run `docpulse index` first", err=True)
+        raise typer.Exit(2)
+    try:
+        config = load_config(config_path or root / "docpulse.yml")
+        index = load_index(index_path)
+    except FileNotFoundError as exc:
+        typer.echo(f"config not found: {exc.filename}", err=True)
+        raise typer.Exit(2) from exc
+
+    if suspects_only:
+        try:
+            diffs = diff_range(root, base, head, three_dot=not two_dot)
+            changed = meaningful_changed_chunks(root, diffs, config, base, head)
+        except RuntimeError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(2) from exc
+        suspects, total = select_suspects(changed, index, config.budget.max_suspects_per_run)
+        _print_suspects(suspects, total)
+        return
+
+    try:
+        client = LLMClient(model or config.model)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    context = GitContext(root, base, head)
+    try:
+        result = run_pipeline(
+            root, base, head, config, client, index, context,
+            mode="check", three_dot=not two_dot,
+        )
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    dest = RepoMarkdownDestination(
+        root, {s.id: s for s in index.sections}, config, _head_commit(root)
+    )
+    dest.publish_findings(result)
+    dest.summarize(result)
+    raise typer.Exit(result.exit_code)
+
+
+@app.command("repair")
+def repair_cmd(
+    base: str = typer.Option(..., "--base", help="Base git ref to diff against"),
+    head: str = typer.Option("HEAD", help="Head git ref"),
+    root: Path = typer.Option(Path("."), help="Repo root"),
+    config_path: Path | None = typer.Option(None, "--config", help="Path to docpulse.yml"),
+    model: str | None = typer.Option(None, "--model", help="LiteLLM model (overrides config)"),
+    write: bool = typer.Option(
+        False, "--write", help="Apply fixes to doc files locally (no push; live PR is Phase 6)"
+    ),
+    two_dot: bool = typer.Option(
+        False, "--two-dot", help="Diff literal base..head instead of merge-base base...head"
+    ),
+) -> None:
+    """Verify, repair stale sections, and print the dry-run companion-PR plan."""
+    index_path = root / ".docpulse" / "index.json"
+    if not index_path.exists():
+        typer.echo("no index found — run `docpulse index` first", err=True)
+        raise typer.Exit(2)
+    try:
+        config = load_config(config_path or root / "docpulse.yml")
+        index = load_index(index_path)
+    except FileNotFoundError as exc:
+        typer.echo(f"config not found: {exc.filename}", err=True)
+        raise typer.Exit(2) from exc
+
+    try:
+        client = LLMClient(model or config.resolve_repair_model())
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    context = GitContext(root, base, head)
+    try:
+        result = run_pipeline(
+            root, base, head, config, client, index, context,
+            mode="repair", three_dot=not two_dot,
+        )
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+
+    dest = RepoMarkdownDestination(
+        root, {s.id: s for s in index.sections}, config, _head_commit(root)
+    )
+    dest.publish_findings(result)
+    plan = dest.build_fix_plan(result)
+    if plan is not None:
+        for path, new_text in sorted(plan.file_writes.items()):
+            original = (root / path).read_text()
+            diff = difflib.unified_diff(
+                original.splitlines(), new_text.splitlines(),
+                fromfile=f"a/{path}", tofile=f"b/{path}", lineterm="",
+            )
+            typer.echo("\n".join(diff))
+        if write:
+            for path, new_text in plan.file_writes.items():
+                (root / path).write_text(new_text)
+            typer.echo(
+                f"\nwrote {len(plan.file_writes)} file(s) on the working tree; "
+                f"branch/push/PR creation lands in Phase 6"
+            )
+        else:
+            typer.echo("\n# Phase 6 would run:")
+            for command in plan.commands:
+                typer.echo("  " + " ".join(shlex.quote(part) for part in command))
+    dest.summarize(result)
+    raise typer.Exit(result.exit_code)
 
 
 @app.command("eval")
