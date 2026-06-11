@@ -21,3 +21,10 @@ def test_replace_sections_bottom_up_no_line_drift():
     assert lines[:2] == ["# A", "NEW A"]
     assert lines[2:] == ["# B", "NEW B"]
     assert "line a1" not in out and "line b1" not in out
+
+
+def test_round_trip_preserves_blank_separators():
+    text = "# A\nbody\n\n# B\nother\n"
+    secs = parse_markdown("d.md", text)
+    # Re-applying each section's own content must reproduce the file byte-for-byte.
+    assert replace_sections(text, [(s, s.content) for s in secs]) == text
