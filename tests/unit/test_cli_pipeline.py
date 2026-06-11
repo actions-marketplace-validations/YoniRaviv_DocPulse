@@ -98,3 +98,39 @@ def test_repair_write_applies_files(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "run_pipeline", lambda *a, **k: result_obj)
     runner.invoke(app, ["repair", "--root", str(tmp_path), "--base", "main", "--write"])
     assert "new body" in (docs / "a.md").read_text()
+
+
+def test_check_exit_2_when_pipeline_raises_runtime_error(monkeypatch, tmp_path):
+    _stub_index_and_config(monkeypatch, tmp_path)
+
+    def boom(*a, **k):
+        raise RuntimeError("bad ref: no-such-base")
+
+    monkeypatch.setattr(cli, "run_pipeline", boom)
+    out = runner.invoke(app, ["check", "--root", str(tmp_path), "--base", "no-such-base"])
+    assert out.exit_code == 2, out.output
+    assert "bad ref" in out.output
+
+
+def test_check_exit_2_when_no_model_configured(monkeypatch, tmp_path):
+    _stub_index_and_config(monkeypatch, tmp_path)
+
+    def no_model(*a, **k):
+        raise ValueError("no model configured; set `model:` in docpulse.yml or pass --model")
+
+    monkeypatch.setattr(cli, "LLMClient", no_model)
+    out = runner.invoke(app, ["check", "--root", str(tmp_path), "--base", "main"])
+    assert out.exit_code == 2, out.output
+    assert "no model configured" in out.output
+
+
+def test_repair_exit_2_when_pipeline_raises_runtime_error(monkeypatch, tmp_path):
+    _stub_index_and_config(monkeypatch, tmp_path)
+
+    def boom(*a, **k):
+        raise RuntimeError("bad ref: no-such-base")
+
+    monkeypatch.setattr(cli, "run_pipeline", boom)
+    out = runner.invoke(app, ["repair", "--root", str(tmp_path), "--base", "no-such-base"])
+    assert out.exit_code == 2, out.output
+    assert "bad ref" in out.output
