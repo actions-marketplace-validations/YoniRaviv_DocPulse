@@ -1,0 +1,10 @@
+status: stale
+intent: "Drop XML export support; only json and csv remain."
+reference_correction: |
+  # Exporting Data
+
+  Call `export(data, fmt)` to serialize a dataset. The `fmt` parameter accepts
+  two values:
+
+  - `"json"` (default) — compact JSON output
+  - `"csv"` — comma-separated values

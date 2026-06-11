@@ -1,0 +1,3 @@
+status: accurate
+intent: "Add private _cacheMisses counter field for internal telemetry; public API unchanged."
+reference_correction: ""

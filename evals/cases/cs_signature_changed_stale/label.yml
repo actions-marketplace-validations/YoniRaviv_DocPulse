@@ -1,0 +1,24 @@
+status: stale
+intent: "Add a format parameter to GenerateReport so callers can choose pdf or csv output."
+reference_correction: |
+  # ReportGenerator
+
+  ## GenerateReport
+
+  ```csharp
+  public byte[] GenerateReport(DateTime startDate, DateTime endDate, string format = "pdf")
+  ```
+
+  Produces a report covering the inclusive date range `[startDate, endDate]`.
+  Pass `format: "csv"` for CSV output; defaults to `"pdf"`.
+
+  ```csharp
+  byte[] pdf = generator.GenerateReport(
+      new DateTime(2024, 1, 1),
+      new DateTime(2024, 3, 31));
+
+  byte[] csv = generator.GenerateReport(
+      new DateTime(2024, 1, 1),
+      new DateTime(2024, 3, 31),
+      format: "csv");
+  ```

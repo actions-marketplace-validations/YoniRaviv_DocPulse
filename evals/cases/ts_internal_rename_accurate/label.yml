@@ -1,0 +1,3 @@
+status: accurate
+intent: "Rename private field pendingTasks to _items; public API and behavior unchanged."
+reference_correction: ""

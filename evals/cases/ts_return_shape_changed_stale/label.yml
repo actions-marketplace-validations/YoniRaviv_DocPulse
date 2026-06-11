@@ -1,0 +1,16 @@
+status: stale
+intent: "Change search() return type from SearchResult[] to a paginated SearchPage object."
+reference_correction: |
+  # search
+
+  ```ts
+  search(query: string): SearchPage
+  ```
+
+  Returns a `SearchPage` object with a `results` array, `total` count, and
+  `nextCursor` for pagination.
+
+  ```ts
+  const page = search("typescript");
+  page.results.forEach(r => console.log(r.title, r.score));
+  ```

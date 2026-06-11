@@ -1,0 +1,5 @@
+status: stale
+intent: "Rename the retries parameter to attempts."
+reference_correction: |
+  Use `fetch(url, attempts)` — `attempts` controls how many times a failed
+  request is retried.
