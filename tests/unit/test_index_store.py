@@ -58,3 +58,20 @@ def test_binary_files_in_code_globs_are_skipped(tmp_path):
         changed_paths=["src/icon.png"], base_commit="def",
     )
     assert updated.base_commit == "def"
+
+
+def test_incremental_update_respects_code_excludes(tmp_path):
+    write_repo(tmp_path)
+    config = Config(
+        model="m",
+        docs=[DocGlob(path="docs/**/*.md")],
+        code={"include": ["**"], "exclude": ["scripts/**"]},
+    )
+    index = build_index(tmp_path, config, embedder=None, base_commit="abc")
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "tool.py").write_text("def helper():\n    return 1\n")
+    updated = update_index(
+        index, tmp_path, config, embedder=None,
+        changed_paths=["scripts/tool.py"], base_commit="def",
+    )
+    assert not any(c.path == "scripts/tool.py" for c in updated.chunks)

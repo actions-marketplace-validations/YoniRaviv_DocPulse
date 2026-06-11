@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pathspec
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DocGlob(BaseModel):
@@ -30,8 +30,8 @@ class LinkingConfig(BaseModel):
 
 
 class BudgetConfig(BaseModel):
-    max_suspects_per_run: int = 20
-    max_tool_calls_per_suspect: int = 10
+    max_suspects_per_run: int = Field(default=20, ge=0)
+    max_tool_calls_per_suspect: int = Field(default=10, ge=0)
 
 
 class Config(BaseModel):

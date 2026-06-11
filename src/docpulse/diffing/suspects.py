@@ -14,6 +14,7 @@ def select_suspects(
     sections_by_id = {section.id: section for section in index.sections}
 
     chunks_by_section: dict[str, list[SuspectChunk]] = {}
+    # Relies on link_graph emitting at most one link per (section, chunk) pair; duplicate links would double-count.
     for link in index.links:
         item = changed_by_id.get(link.chunk_id)
         if item is None or link.section_id not in sections_by_id:

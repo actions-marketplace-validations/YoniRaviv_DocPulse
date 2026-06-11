@@ -77,6 +77,8 @@ def update_index(
         if rel.endswith(".md"):
             sections.extend(parse_markdown(rel, file_path.read_text()))
         else:
+            if not config.code.matches(rel):
+                continue  # excluded by code globs: skip
             if rules_for_path(rel) is None:
                 continue  # unsupported file type: don't read
             chunks.extend(chunk_source(rel, file_path.read_text()))

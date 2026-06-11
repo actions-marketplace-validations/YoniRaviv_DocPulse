@@ -44,3 +44,14 @@ def test_code_globs_matches():
     assert not globs.matches("tests/test_auth.py")
     assert not globs.matches("src/auth.test.ts")
     assert not globs.matches("README.md")
+
+
+def test_negative_budget_rejected(tmp_path):
+    import pytest
+
+    config_file = tmp_path / "docpulse.yml"
+    config_file.write_text(
+        'docs:\n  - path: "docs/**/*.md"\nbudget:\n  max_suspects_per_run: -1\n'
+    )
+    with pytest.raises(ValueError):
+        load_config(config_file)
