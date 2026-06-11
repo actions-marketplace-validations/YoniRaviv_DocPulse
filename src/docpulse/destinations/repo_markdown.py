@@ -1,4 +1,21 @@
-from docpulse.models import DocSection
+import subprocess
+from collections.abc import Callable
+from pathlib import Path
+
+from docpulse.config import Config
+from docpulse.models import DocSection, RunResult
+
+CommandRunner = Callable[[list[str]], str]
+
+
+def _default_runner(root: Path) -> CommandRunner:
+    def run(args: list[str]) -> str:
+        result = subprocess.run(
+            args, cwd=root, capture_output=True, encoding="utf-8", errors="replace"
+        )
+        return result.stdout if result.returncode == 0 else ""
+
+    return run
 
 
 def _content_lines(content: str) -> list[str]:
@@ -29,3 +46,55 @@ def replace_sections(file_text: str, edits: list[tuple[DocSection, str]]) -> str
         lines[section.start_line - 1 : section.end_line] = _content_lines(new_content)
     trailing = "\n" if file_text.endswith("\n") else ""
     return "\n".join(lines) + trailing
+
+
+class RepoMarkdownDestination:
+    """Plans a companion-PR + flag comment for a repo-markdown destination.
+
+    Phase 5 is dry-run: it constructs the branch/commit/PR-body and the `gh`/`git`
+    commands but does not push or open a PR (deferred to Phase 6). `summarize` and
+    `publish_findings` print to stdout.
+    """
+
+    def __init__(
+        self,
+        root: Path,
+        sections_by_id: dict[str, DocSection],
+        config: Config,
+        head_sha: str,
+        run_command: CommandRunner | None = None,
+        dry_run: bool = True,
+    ) -> None:
+        self.root = root
+        self.sections_by_id = sections_by_id
+        self.config = config
+        self.head_sha = head_sha
+        self.run_command = run_command or _default_runner(root)
+        self.dry_run = dry_run
+
+    def flag_comment(self, result: RunResult) -> str:
+        """Markdown comment listing stale sections at/above flag_threshold."""
+        threshold = self.config.confidence.flag_threshold
+        flagged = [
+            v for v in result.verdicts
+            if v.status == "stale" and v.confidence >= threshold
+        ]
+        if not flagged:
+            return ""
+        lines = ["## \U0001fa7a DocPulse — flagged documentation", ""]
+        for v in flagged:
+            section = self.sections_by_id.get(v.section_id)
+            loc = section.path if section else v.section_id
+            evidence = f" _(evidence: {', '.join(v.evidence)})_" if v.evidence else ""
+            lines.append(f"- **{v.section_id}** ({loc}) — {v.diagnosis}{evidence}")
+        return "\n".join(lines)
+
+    def publish_findings(self, result: RunResult) -> None:
+        comment = self.flag_comment(result)
+        if comment:
+            print(comment)
+
+    def summarize(self, result: RunResult) -> None:
+        from docpulse.report.summary import render_summary
+
+        print(render_summary(result))

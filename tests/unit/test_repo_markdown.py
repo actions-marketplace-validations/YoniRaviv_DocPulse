@@ -1,5 +1,9 @@
+from pathlib import Path
+
+from docpulse.config import Config, DocGlob
+from docpulse.destinations.repo_markdown import RepoMarkdownDestination, replace_sections
 from docpulse.indexing.doc_parser import parse_markdown
-from docpulse.destinations.repo_markdown import replace_sections
+from docpulse.models import DocSection, RunResult, Verdict
 
 
 def test_replace_single_section():
@@ -28,3 +32,44 @@ def test_round_trip_preserves_blank_separators():
     secs = parse_markdown("d.md", text)
     # Re-applying each section's own content must reproduce the file byte-for-byte.
     assert replace_sections(text, [(s, s.content) for s in secs]) == text
+
+
+def _section(sid="docs/auth.md#login", path="docs/auth.md"):
+    return DocSection(id=sid, path=path, heading_path=["login"], content="c",
+                      content_hash="h", mentions=[], start_line=1, end_line=1)
+
+
+def _dest(sections, dry_run=True):
+    return RepoMarkdownDestination(
+        root=Path("."),
+        sections_by_id={s.id: s for s in sections},
+        config=Config(docs=[DocGlob(path="**/*.md")]),
+        head_sha="abcdef1234567890",
+        dry_run=dry_run,
+    )
+
+
+def test_flag_comment_lists_stale_above_threshold():
+    section = _section()
+    result = RunResult(
+        verdicts=[
+            Verdict(section_id=section.id, status="stale", confidence=0.8,
+                    diagnosis="param renamed", evidence=["auth.py:2"]),
+            Verdict(section_id="other", status="stale", confidence=0.2,
+                    diagnosis="weak", evidence=[]),  # below threshold -> excluded
+            Verdict(section_id="acc", status="accurate", confidence=0.0,
+                    diagnosis="fine", evidence=[]),
+        ],
+        repairs=[], suspects_checked=3, suspects_total=3, tokens_used=0, exit_code=1,
+    )
+    comment = _dest([section]).flag_comment(result)
+    assert "param renamed" in comment
+    assert "auth.py:2" in comment
+    assert "weak" not in comment  # below flag_threshold
+    assert "fine" not in comment  # accurate not flagged
+
+
+def test_flag_comment_empty_when_nothing_flagged():
+    result = RunResult(verdicts=[], repairs=[], suspects_checked=0, suspects_total=0,
+                       tokens_used=0, exit_code=0)
+    assert _dest([]).flag_comment(result) == ""
