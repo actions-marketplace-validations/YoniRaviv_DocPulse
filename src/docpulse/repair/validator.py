@@ -65,6 +65,12 @@ def validate(
     - the LLM judges the rewrite accurate vs the NEW code, AND
     - the LLM judges the style consistent with the original.
 
+    min_preservation defaults to 0.5: at least half the original paragraph blocks
+    must survive byte-identical in the repaired output.  This guards against the
+    repairer doing a wholesale rewrite of a section instead of a surgical fix —
+    only the stale block(s) should change; the surrounding context must be left
+    untouched.
+
     Any LLM/parse failure fails safe (validation_passed=False). Returns a new
     Repair (the input is not mutated).
     """
