@@ -18,7 +18,7 @@ def render_summary(result: RunResult, fix_ref: str | None = None) -> str:
     verified = sum(v.status == "accurate" for v in result.verdicts)
     unverified = sum(v.status == "unverified" for v in result.verdicts)
     flagged = sum(v.status == "stale" for v in result.verdicts)
-    fixed = len(result.repairs)
+    fixed = sum(r.validation_passed for r in result.repairs)
     not_checked = result.suspects_total - result.suspects_checked
     if fix_ref:
         fix_note = f" (PR {fix_ref})"

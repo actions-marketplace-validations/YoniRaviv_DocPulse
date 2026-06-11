@@ -39,3 +39,18 @@ def test_render_summary_reports_counts_and_tokens():
     assert "1 unverified" in out
     assert "2 not checked" in out  # 5 total - 3 checked
     assert "tokens: 1234" in out
+
+
+def test_render_summary_fixed_counts_only_validated_repairs():
+    result = RunResult(
+        verdicts=[_v("stale", 0.9)],
+        repairs=[
+            Repair(section_id="a", new_content="x", confidence=0.9,
+                   validation_passed=True, rationale="r"),
+            Repair(section_id="b", new_content="y", confidence=0.9,
+                   validation_passed=False, rationale="failed"),
+        ],
+        suspects_checked=2, suspects_total=2, tokens_used=0, exit_code=1,
+    )
+    out = render_summary(result)
+    assert "1 fixed" in out  # only the validation_passed repair counts, not the skipped one
