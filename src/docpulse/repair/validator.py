@@ -82,7 +82,7 @@ def validate(
     preserved = preservation_ratio(bundle.doc_content, repair.new_content)
     messages = [
         {"role": "system", "content": VALIDATOR_SYSTEM_PROMPT},
-        build_validation_user_message(repair.new_content, bundle.new_code),
+        build_validation_user_message(bundle.doc_content, repair.new_content, bundle.new_code),
     ]
     try:
         message = client.complete(messages, tools=[SUBMIT_VALIDATION_SCHEMA])

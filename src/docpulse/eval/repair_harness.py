@@ -127,11 +127,17 @@ def judge_repair(client: Any, new_content: str, reference_correction: str) -> Ru
         if not tool_calls:
             raise ValueError("no tool call")
         args = json.loads(tool_calls[0].function.arguments or "{}")
+        accuracy = _clamp_1_5(args["accuracy"])
+        completeness = _clamp_1_5(args["completeness"])
+        style_fidelity = _clamp_1_5(args["style_fidelity"])
+        flagged = bool(args["needs_human_review"]) or min(
+            accuracy, completeness, style_fidelity
+        ) <= 3
         return RubricScore(
-            accuracy=_clamp_1_5(args["accuracy"]),
-            completeness=_clamp_1_5(args["completeness"]),
-            style_fidelity=_clamp_1_5(args["style_fidelity"]),
-            needs_human_review=bool(args["needs_human_review"]),
+            accuracy=accuracy,
+            completeness=completeness,
+            style_fidelity=style_fidelity,
+            needs_human_review=flagged,
             justification=str(args.get("justification", "")),
         )
     except (LLMError, KeyError, ValueError, TypeError, json.JSONDecodeError) as exc:

@@ -108,6 +108,17 @@ def test_judge_repair_fails_safe_on_llm_error():
     assert score.needs_human_review is True
 
 
+def test_judge_repair_flags_low_score_even_if_model_says_no():
+    client = ScriptedClient({
+        "submit_rubric": FakeMessage(tool_calls=[FakeToolCall("submit_rubric", {
+            "accuracy": 5, "completeness": 3, "style_fidelity": 5,
+            "needs_human_review": False, "justification": "borderline",
+        })]),
+    })
+    score = judge_repair(client, "n", "r")
+    assert score.needs_human_review is True  # min score 3 -> forced flag
+
+
 def test_evaluate_repairs_over_one_stale_case(monkeypatch):
     # Stub load_cases (and reference lookup) so no filesystem is needed.
     import docpulse.eval.repair_harness as rh

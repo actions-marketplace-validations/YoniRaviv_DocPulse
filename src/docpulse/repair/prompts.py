@@ -73,9 +73,15 @@ formatting, and structure. false if it reworded or restructured correct parts.
 """
 
 
-def build_validation_user_message(new_content: str, new_code: str) -> dict[str, str]:
+def build_validation_user_message(
+    original_content: str, new_content: str, new_code: str
+) -> dict[str, str]:
     content = f"""\
-## Rewritten documentation section
+## ORIGINAL documentation section (before repair)
+
+{original_content}
+
+## REWRITTEN documentation section
 
 {new_content}
 
@@ -85,5 +91,6 @@ def build_validation_user_message(new_content: str, new_code: str) -> dict[str, 
 {new_code}
 ```
 
-Judge accuracy and style, then call submit_validation."""
+Judge accuracy (rewrite vs NEW code) and style (rewrite vs ORIGINAL), then call \
+submit_validation."""
     return {"role": "user", "content": content}

@@ -1,6 +1,7 @@
 import json
 
 from docpulse.models import Repair
+from docpulse.repair.prompts import build_validation_user_message
 from docpulse.repair.repairer import RepairBundle
 from docpulse.repair.validator import preservation_ratio, validate
 
@@ -133,3 +134,12 @@ def test_validate_malformed_response_fails_safe():
     bad = FakeMessage(tool_calls=[FakeToolCall("submit_validation", "{bad json")])
     out = validate(FakeClient([bad]), _repair("Keep A.\n\nNew B."), _bundle())
     assert out.validation_passed is False
+
+
+def test_validation_message_includes_original_rewrite_and_new_code():
+    msg = build_validation_user_message("ORIG TEXT", "NEW TEXT", "code here")
+    body = msg["content"]
+    assert msg["role"] == "user"
+    assert "ORIG TEXT" in body
+    assert "NEW TEXT" in body
+    assert "code here" in body
