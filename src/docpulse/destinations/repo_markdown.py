@@ -1,21 +1,9 @@
-import subprocess
-from collections.abc import Callable
 from pathlib import Path
 
+from docpulse.command_runner import CommandRunner, default_runner
 from docpulse.config import Config
 from docpulse.models import DocSection, RunResult
-
-CommandRunner = Callable[[list[str]], str]
-
-
-def _default_runner(root: Path) -> CommandRunner:
-    def run(args: list[str]) -> str:
-        result = subprocess.run(
-            args, cwd=root, capture_output=True, encoding="utf-8", errors="replace"
-        )
-        return result.stdout if result.returncode == 0 else ""
-
-    return run
+from docpulse.report.summary import render_summary
 
 
 def _content_lines(content: str) -> list[str]:
@@ -69,7 +57,7 @@ class RepoMarkdownDestination:
         self.sections_by_id = sections_by_id
         self.config = config
         self.head_sha = head_sha
-        self.run_command = run_command or _default_runner(root)
+        self.run_command = run_command or default_runner(root)
         self.dry_run = dry_run
 
     def flag_comment(self, result: RunResult) -> str:
@@ -95,6 +83,4 @@ class RepoMarkdownDestination:
             print(comment)
 
     def summarize(self, result: RunResult) -> None:
-        from docpulse.report.summary import render_summary
-
         print(render_summary(result))

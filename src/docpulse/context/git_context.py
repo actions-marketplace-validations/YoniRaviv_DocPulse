@@ -1,24 +1,12 @@
 import os
 import re
-import subprocess
-from collections.abc import Callable
 from pathlib import Path
+
+from docpulse.command_runner import CommandRunner, default_runner
 
 # Issue keys are ABC-123 style; require >=2 leading uppercase letters so encoding
 # strings like UTF-8 / CP-1252 are not mistaken for tickets.
 _TICKET = re.compile(r"\b[A-Z]{2,}[A-Z0-9]*-\d+\b")
-
-CommandRunner = Callable[[list[str]], str]
-
-
-def _default_runner(root: Path) -> CommandRunner:
-    def run(args: list[str]) -> str:
-        result = subprocess.run(
-            args, cwd=root, capture_output=True, encoding="utf-8", errors="replace"
-        )
-        return result.stdout if result.returncode == 0 else ""
-
-    return run
 
 
 class GitContext:
@@ -41,7 +29,7 @@ class GitContext:
         self.base = base
         self.head = head
         self.env = dict(os.environ) if env is None else env
-        self.run_command = run_command or _default_runner(root)
+        self.run_command = run_command or default_runner(root)
 
     def get_intent(self) -> str:
         parts: list[str] = []

@@ -73,3 +73,24 @@ def test_flag_comment_empty_when_nothing_flagged():
     result = RunResult(verdicts=[], repairs=[], suspects_checked=0, suspects_total=0,
                        tokens_used=0, exit_code=0)
     assert _dest([]).flag_comment(result) == ""
+
+
+def test_flag_comment_excludes_unverified_above_threshold():
+    result = RunResult(
+        verdicts=[Verdict(section_id="s", status="unverified", confidence=0.9,
+                          diagnosis="cannot tell", evidence=[])],
+        repairs=[], suspects_checked=1, suspects_total=1, tokens_used=0, exit_code=0,
+    )
+    assert _dest([]).flag_comment(result) == ""  # unverified never flagged
+
+
+def test_flag_comment_without_evidence_omits_evidence_suffix():
+    section = _section()
+    result = RunResult(
+        verdicts=[Verdict(section_id=section.id, status="stale", confidence=0.8,
+                          diagnosis="renamed", evidence=[])],
+        repairs=[], suspects_checked=1, suspects_total=1, tokens_used=0, exit_code=1,
+    )
+    comment = _dest([section]).flag_comment(result)
+    assert "renamed" in comment
+    assert "evidence:" not in comment  # no evidence -> no evidence suffix
