@@ -1,0 +1,3 @@
+status: accurate
+intent: "Simplify total() to use the builtin sum()."
+reference_correction: ""
