@@ -81,7 +81,7 @@ def test_judge_repair_returns_rubric_score():
     assert score.needs_human_review is False
 
 
-def test_judge_repair_clamps_scores_to_1_5_and_fails_safe_on_garbage():
+def test_judge_repair_clamps_scores_to_1_5():
     client = ScriptedClient({
         "submit_rubric": FakeMessage(tool_calls=[FakeToolCall("submit_rubric", {
             "accuracy": 9, "completeness": 0, "style_fidelity": 3,
@@ -91,6 +91,20 @@ def test_judge_repair_clamps_scores_to_1_5_and_fails_safe_on_garbage():
     score = judge_repair(client, "n", "r")
     assert score.accuracy == 5      # clamped to 5
     assert score.completeness == 1  # clamped to 1
+    assert score.needs_human_review is True
+
+
+def test_judge_repair_fails_safe_on_llm_error():
+    from docpulse.llm import LLMError
+
+    class BoomClient:
+        def complete(self, messages, tools=None):
+            raise LLMError("boom")
+
+    score = judge_repair(BoomClient(), "n", "r")
+    assert score.accuracy == 1
+    assert score.completeness == 1
+    assert score.style_fidelity == 1
     assert score.needs_human_review is True
 
 

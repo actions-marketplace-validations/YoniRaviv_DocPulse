@@ -4,8 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from docpulse.config import Config
 from docpulse.eval.harness import EvalCase, load_cases
+from docpulse.llm import LLMError
 from docpulse.models import Repair, Verdict
 from docpulse.repair.repairer import RepairBundle, repair
 from docpulse.repair.routing import Tier, route
@@ -107,8 +110,6 @@ def _clamp_1_5(value: Any) -> int:
 def judge_repair(client: Any, new_content: str, reference_correction: str) -> RubricScore:
     """LLM rubric scoring the repair against the reference. Fails safe to a
     flagged all-1s score on any LLM/parse failure."""
-    from docpulse.llm import LLMError
-
     messages = [
         {"role": "system", "content": RUBRIC_SYSTEM_PROMPT},
         {
@@ -139,8 +140,6 @@ def judge_repair(client: Any, new_content: str, reference_correction: str) -> Ru
 
 def _reference_correction(case: EvalCase) -> str:
     """Read reference_correction from the case's label.yml."""
-    import yaml
-
     label = yaml.safe_load((case.path / "label.yml").read_text())
     return label.get("reference_correction", "") or ""
 
