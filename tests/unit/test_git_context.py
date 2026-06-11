@@ -35,4 +35,28 @@ def test_get_intent_satisfies_protocol():
     from docpulse.context.base import ContextProvider
 
     ctx: ContextProvider = GitContext(Path("."), "b", "h", env={}, run_command=lambda a: "")
-    assert isinstance(ctx.get_intent(), str)
+    assert isinstance(ctx, ContextProvider)
+
+
+def test_intent_combines_pr_env_and_commits():
+    ctx = GitContext(
+        Path("."), "base", "head",
+        env={"PR_TITLE": "Add logout", "PR_BODY": "see PROJ-1"},
+        run_command=lambda args: "implement logout endpoint\n",
+    )
+    intent = ctx.get_intent()
+    assert "PR: Add logout" in intent
+    assert "Commits:" in intent
+    assert "implement logout endpoint" in intent
+    assert "Tickets: PROJ-1" in intent
+
+
+def test_intent_body_only_has_no_dangling_pr_label():
+    ctx = GitContext(
+        Path("."), "base", "head",
+        env={"PR_BODY": "just a body, no title"},
+        run_command=lambda args: "",
+    )
+    intent = ctx.get_intent()
+    assert "just a body" in intent
+    assert "PR: \n" not in intent  # no dangling empty "PR:" label

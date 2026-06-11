@@ -4,7 +4,9 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
-_TICKET = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
+# Issue keys are ABC-123 style; require >=2 leading uppercase letters so encoding
+# strings like UTF-8 / CP-1252 are not mistaken for tickets.
+_TICKET = re.compile(r"\b[A-Z]{2,}[A-Z0-9]*-\d+\b")
 
 CommandRunner = Callable[[list[str]], str]
 
@@ -45,8 +47,13 @@ class GitContext:
         parts: list[str] = []
         title = self.env.get("DOCPULSE_PR_TITLE") or self.env.get("PR_TITLE", "")
         body = self.env.get("DOCPULSE_PR_BODY") or self.env.get("PR_BODY", "")
-        if title or body:
-            parts.append(f"PR: {title}\n\n{body}".strip())
+        pr_lines: list[str] = []
+        if title:
+            pr_lines.append(f"PR: {title}")
+        if body:
+            pr_lines.append(body)
+        if pr_lines:
+            parts.append("\n\n".join(pr_lines))
         commits = self.run_command(
             ["git", "log", "--format=%s%n%b", f"{self.base}..{self.head}"]
         ).strip()
