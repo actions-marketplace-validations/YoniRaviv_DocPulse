@@ -138,16 +138,14 @@ def eval_cmd(
         raise typer.Exit(1)
 
     if repair:
-        repair_model = chosen_model
         repair_cfg_path = config_path or root / "docpulse.yml"
+        repair_model = chosen_model
+        config = Config(docs=[DocGlob(path="**/*.md")])  # no config: default to all markdown
         if repair_cfg_path.exists():
-            repair_model = load_config(repair_cfg_path).resolve_repair_model() or chosen_model
+            repair_cfg = load_config(repair_cfg_path)  # single load, used twice below
+            repair_model = repair_cfg.resolve_repair_model() or chosen_model
+            config = repair_cfg
         repair_client = LLMClient(repair_model)
-        config = (
-            load_config(repair_cfg_path)
-            if repair_cfg_path.exists()
-            else Config(docs=[DocGlob(path="**/*.md")])
-        )
         repair_report = evaluate_repairs(repair_client, cases, config)
         typer.echo("\n--- repair eval (stale cases) ---")
         typer.echo(f"{'case':<28} {'preserve':<9} {'tier':<9} acc/cmp/sty  flag")
