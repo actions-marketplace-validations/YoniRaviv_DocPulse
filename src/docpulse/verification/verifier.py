@@ -53,7 +53,7 @@ def _verdict_from_args(section_id: str, args: dict[str, Any]) -> Verdict:
     return Verdict(
         section_id=section_id,
         status=status,
-        confidence=float(args.get("confidence", 0.0)),
+        confidence=max(0.0, min(1.0, float(args.get("confidence", 0.0)))),
         diagnosis=str(args.get("diagnosis", "")),
         evidence=[str(e) for e in args.get("evidence", [])],
     )

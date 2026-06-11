@@ -199,3 +199,13 @@ def test_multi_call_turn_responds_to_every_tool_call(tmp_path):
                  if isinstance(m, dict) and m.get("role") == "tool"}
     assert tool_ids == {"sv1", "rf1"}
     assert tool_ids <= responded  # every tool_call got a response -> valid protocol
+
+
+def test_confidence_is_clamped_to_unit_interval(tmp_path):
+    client = FakeClient([
+        FakeMessage(tool_calls=[FakeToolCall(
+            "submit_verdict",
+            {"status": "stale", "confidence": 2.5, "diagnosis": "x", "evidence": []})]),
+    ])
+    verdict = verify(client, tmp_path, _empty_index(), _bundle(), max_tool_calls=2)
+    assert verdict.confidence == 1.0

@@ -26,7 +26,8 @@ jobs:
     name: verifier eval (precision gate)
     runs-on: ubuntu-latest
     needs: test
-    # Only runs when an API key is configured (forks/PRs without the secret skip it).
+    # Skip on fork PRs (org secrets are unavailable there); pushes and same-repo PRs
+    # proceed, then bail out in-shell if ANTHROPIC_API_KEY is unset.
     if: ${{ github.event_name == 'push' || github.repository == github.event.pull_request.head.repo.full_name }}
     steps:
       - uses: actions/checkout@v4
