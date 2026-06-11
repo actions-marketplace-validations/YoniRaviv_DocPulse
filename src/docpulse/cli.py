@@ -80,7 +80,9 @@ def check(
     if not suspects:
         typer.echo("no suspect doc sections")
         return
-    typer.echo(f"{len(suspects)} suspect section(s) (of {total} candidates):")
+    sections_word = "section" if len(suspects) == 1 else "sections"
+    candidates_word = "candidate" if total == 1 else "candidates"
+    typer.echo(f"{len(suspects)} suspect {sections_word} (of {total} {candidates_word}):")
     for suspect in suspects:
         chunk_names = ", ".join(sc.chunk.name for sc in suspect.changed_chunks)
         typer.echo(f"  {suspect.section.id}  score={suspect.score:.2f}  changed: {chunk_names}")

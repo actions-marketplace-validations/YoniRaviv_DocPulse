@@ -85,7 +85,7 @@ def test_check_surfaces_linked_section_on_param_rename(tmp_path):
     assert "AuthService.login" in result.output
     assert "pricing.md" not in result.output
     assert "sessions" not in result.output
-    assert "1 suspect section(s)" in result.output
+    assert "1 suspect section (of 1 candidate)" in result.output
 
 
 def test_check_comment_only_change_surfaces_nothing(tmp_path):

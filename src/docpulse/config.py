@@ -1,8 +1,14 @@
+from functools import lru_cache
 from pathlib import Path
 
 import pathspec
 import yaml
 from pydantic import BaseModel, Field
+
+
+@lru_cache(maxsize=None)
+def _compiled_spec(patterns: tuple[str, ...]) -> pathspec.PathSpec:
+    return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
 
 
 class DocGlob(BaseModel):
@@ -14,9 +20,9 @@ class CodeGlobs(BaseModel):
     exclude: list[str] = []
 
     def matches(self, path: str) -> bool:
-        include = pathspec.PathSpec.from_lines("gitwildmatch", self.include)
-        exclude = pathspec.PathSpec.from_lines("gitwildmatch", self.exclude)
-        return include.match_file(path) and not exclude.match_file(path)
+        return _compiled_spec(tuple(self.include)).match_file(path) and not _compiled_spec(
+            tuple(self.exclude)
+        ).match_file(path)
 
 
 class ConfidenceConfig(BaseModel):
