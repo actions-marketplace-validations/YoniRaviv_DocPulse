@@ -57,3 +57,33 @@ def build_repair_user_message(bundle: RepairBundle) -> dict[str, str]:
 Rewrite the section, changing only what the code change made inaccurate, then \
 call submit_repair."""
     return {"role": "user", "content": content}
+
+
+VALIDATOR_SYSTEM_PROMPT = """\
+You are DocPulse's repair validator. You are given a documentation section that \
+was rewritten to fix staleness, plus the NEW code it should now describe. Judge \
+the rewrite — do NOT rewrite it yourself.
+
+Call `submit_validation` exactly once with:
+- accurate_vs_code: true if the rewritten section correctly describes what the \
+NEW code does (names, signatures, behavior). false if anything is wrong or invented.
+- style_consistent: true if the rewrite keeps the original section's tone, \
+formatting, and structure. false if it reworded or restructured correct parts.
+- notes: one sentence justifying the judgment.
+"""
+
+
+def build_validation_user_message(new_content: str, new_code: str) -> dict[str, str]:
+    content = f"""\
+## Rewritten documentation section
+
+{new_content}
+
+## NEW code it must accurately describe
+
+```
+{new_code}
+```
+
+Judge accuracy and style, then call submit_validation."""
+    return {"role": "user", "content": content}
