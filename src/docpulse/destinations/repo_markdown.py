@@ -145,13 +145,15 @@ class RepoMarkdownDestination:
         commit_message = "docs: sync stale sections (DocPulse)"
         pr_title = "\U0001f4dd DocPulse: sync docs with code changes"
         pr_body = "DocPulse detected and fixed stale documentation:\n\n" + "\n".join(body_lines)
+        pr_create = ["gh", "pr", "create", "--title", pr_title, "--body", pr_body]
+        if self.base_branch:
+            pr_create += ["--base", self.base_branch]
         commands = [
             ["git", "checkout", "-b", branch],
             *[["git", "add", path] for path in sorted(file_writes)],
             ["git", "commit", "-m", commit_message],
             ["git", "push", "-u", "origin", branch],
-            # TODO(Phase 6): add --base <base_branch> once the live path lands.
-            ["gh", "pr", "create", "--title", pr_title, "--body", pr_body],
+            pr_create,
         ]
         return FixPlan(branch, commit_message, pr_title, pr_body, file_writes, commands)
 

@@ -225,3 +225,46 @@ def test_publish_findings_live_without_pr_number_prints(capsys):
     )
     dest.publish_findings(_stale_result(section))
     assert "param renamed" in capsys.readouterr().out  # falls back to print
+
+
+def _fixable_result(section):
+    return RunResult(
+        verdicts=[Verdict(section_id=section.id, status="stale", confidence=0.95,
+                          diagnosis="d", evidence=[])],
+        repairs=[Repair(section_id=section.id, new_content="# login\nfixed",
+                        confidence=0.95, validation_passed=True, rationale="r")],
+        suspects_checked=1, suspects_total=1, tokens_used=0, exit_code=1,
+    )
+
+
+def test_fix_plan_includes_base_branch_when_set(tmp_path):
+    md = tmp_path / "docs" / "auth.md"
+    md.parent.mkdir(parents=True)
+    md.write_text("# login\nold\n")
+    section = DocSection(id="docs/auth.md#login", path="docs/auth.md",
+                         heading_path=["login"], content="# login\nold",
+                         content_hash="h", mentions=[], start_line=1, end_line=2)
+    dest = RepoMarkdownDestination(
+        root=tmp_path, sections_by_id={section.id: section},
+        config=Config(docs=[DocGlob(path="**/*.md")]), head_sha="abcdef1234567890",
+        base_branch="main",
+    )
+    plan = dest.build_fix_plan(_fixable_result(section))
+    pr_create = [c for c in plan.commands if c[:3] == ["gh", "pr", "create"]][0]
+    assert "--base" in pr_create and pr_create[pr_create.index("--base") + 1] == "main"
+
+
+def test_fix_plan_omits_base_branch_when_unset(tmp_path):
+    md = tmp_path / "docs" / "auth.md"
+    md.parent.mkdir(parents=True)
+    md.write_text("# login\nold\n")
+    section = DocSection(id="docs/auth.md#login", path="docs/auth.md",
+                         heading_path=["login"], content="# login\nold",
+                         content_hash="h", mentions=[], start_line=1, end_line=2)
+    dest = RepoMarkdownDestination(
+        root=tmp_path, sections_by_id={section.id: section},
+        config=Config(docs=[DocGlob(path="**/*.md")]), head_sha="abcdef1234567890",
+    )
+    plan = dest.build_fix_plan(_fixable_result(section))
+    pr_create = [c for c in plan.commands if c[:3] == ["gh", "pr", "create"]][0]
+    assert "--base" not in pr_create
