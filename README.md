@@ -18,6 +18,7 @@ on: pull_request
 jobs:
   docpulse:
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'docpulse/fix-') }}
     permissions:
       contents: write          # repair mode pushes a companion branch
       pull-requests: write
