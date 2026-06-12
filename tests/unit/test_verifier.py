@@ -209,3 +209,31 @@ def test_confidence_is_clamped_to_unit_interval(tmp_path):
     ])
     verdict = verify(client, tmp_path, _empty_index(), _bundle(), max_tool_calls=2)
     assert verdict.confidence == 1.0
+
+
+# --- evidence coercion tests (robustness for OSS/Ollama models) ---
+
+from docpulse.verification.verifier import _verdict_from_args  # noqa: E402
+
+
+def test_verdict_evidence_proper_list_preserved():
+    v = _verdict_from_args("s", {"status": "stale", "confidence": 0.9,
+                                 "diagnosis": "d", "evidence": ["auth.py:2", "auth.py:5"]})
+    assert v.evidence == ["auth.py:2", "auth.py:5"]
+
+
+def test_verdict_evidence_single_string_not_char_exploded():
+    v = _verdict_from_args("s", {"status": "stale", "confidence": 0.9,
+                                 "diagnosis": "d", "evidence": "auth.py:10"})
+    assert v.evidence == ["auth.py:10"]  # NOT ['a','u','t','h', ...]
+
+
+def test_verdict_evidence_json_array_string_is_parsed():
+    v = _verdict_from_args("s", {"status": "stale", "confidence": 0.9,
+                                 "diagnosis": "d", "evidence": '["auth.py:10", "auth.py:20"]'})
+    assert v.evidence == ["auth.py:10", "auth.py:20"]
+
+
+def test_verdict_evidence_missing_is_empty_list():
+    v = _verdict_from_args("s", {"status": "accurate", "confidence": 0.0, "diagnosis": "d"})
+    assert v.evidence == []

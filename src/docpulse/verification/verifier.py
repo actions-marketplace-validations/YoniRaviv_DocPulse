@@ -38,6 +38,31 @@ SUBMIT_VERDICT_SCHEMA: dict[str, Any] = {
 }
 
 
+def _as_evidence_list(value: Any) -> list[str]:
+    """Coerce a model-supplied `evidence` field into list[str].
+
+    Some models (esp. local/OSS via Ollama) return `evidence` as a JSON-encoded
+    array string or a single string rather than a JSON array; iterating a bare
+    string would explode it into characters. Normalize every shape to list[str].
+    """
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(e) for e in value]
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return []
+        try:
+            parsed = json.loads(stripped)
+        except (json.JSONDecodeError, ValueError):
+            parsed = None
+        if isinstance(parsed, list):
+            return [str(e) for e in parsed]
+        return [stripped]
+    return [str(value)]
+
+
 def _unverified(section_id: str, reason: str) -> Verdict:
     return Verdict(
         section_id=section_id, status="unverified", confidence=0.0,
@@ -55,7 +80,7 @@ def _verdict_from_args(section_id: str, args: dict[str, Any]) -> Verdict:
         status=status,
         confidence=max(0.0, min(1.0, float(args.get("confidence", 0.0)))),
         diagnosis=str(args.get("diagnosis", "")),
-        evidence=[str(e) for e in args.get("evidence", [])],
+        evidence=_as_evidence_list(args.get("evidence")),
     )
 
 
