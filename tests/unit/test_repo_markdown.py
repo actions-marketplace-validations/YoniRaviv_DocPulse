@@ -193,3 +193,35 @@ def test_build_fix_plan_groups_two_repairs_in_one_file(tmp_path):
     written = plan.file_writes["docs/api.md"]
     assert "NEW A" in written and "NEW B" in written
     assert "old a" not in written and "old b" not in written
+
+
+def _stale_result(section):
+    return RunResult(
+        verdicts=[Verdict(section_id=section.id, status="stale", confidence=0.8,
+                          diagnosis="param renamed", evidence=["auth.py:2"])],
+        repairs=[], suspects_checked=1, suspects_total=1, tokens_used=0, exit_code=1,
+    )
+
+
+def test_publish_findings_live_posts_comment_to_pr():
+    section = _section()
+    calls = []
+    dest = RepoMarkdownDestination(
+        root=Path("."), sections_by_id={section.id: section},
+        config=Config(docs=[DocGlob(path="**/*.md")]), head_sha="abcdef1234567890",
+        run_command=lambda args: calls.append(args) or "",
+        dry_run=False, pr_number="42",
+    )
+    dest.publish_findings(_stale_result(section))
+    assert calls == [["gh", "pr", "comment", "42", "--body", dest.flag_comment(_stale_result(section))]]
+
+
+def test_publish_findings_live_without_pr_number_prints(capsys):
+    section = _section()
+    dest = RepoMarkdownDestination(
+        root=Path("."), sections_by_id={section.id: section},
+        config=Config(docs=[DocGlob(path="**/*.md")]), head_sha="abcdef1234567890",
+        run_command=lambda args: "", dry_run=False, pr_number=None,
+    )
+    dest.publish_findings(_stale_result(section))
+    assert "param renamed" in capsys.readouterr().out  # falls back to print

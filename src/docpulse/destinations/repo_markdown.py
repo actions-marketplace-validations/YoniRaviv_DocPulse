@@ -66,6 +66,8 @@ class RepoMarkdownDestination:
         head_sha: str,
         run_command: CommandRunner | None = None,
         dry_run: bool = True,
+        base_branch: str | None = None,
+        pr_number: str | None = None,
     ) -> None:
         self.root = root
         self.sections_by_id = sections_by_id
@@ -73,6 +75,8 @@ class RepoMarkdownDestination:
         self.head_sha = head_sha
         self.run_command = run_command or default_runner(root)
         self.dry_run = dry_run
+        self.base_branch = base_branch
+        self.pr_number = pr_number
 
     def flag_comment(self, result: RunResult) -> str:
         """Markdown comment listing stale sections at/above flag_threshold."""
@@ -93,7 +97,11 @@ class RepoMarkdownDestination:
 
     def publish_findings(self, result: RunResult) -> None:
         comment = self.flag_comment(result)
-        if comment:
+        if not comment:
+            return
+        if not self.dry_run and self.pr_number:
+            self.run_command(["gh", "pr", "comment", self.pr_number, "--body", comment])
+        else:
             print(comment)
 
     def summarize(self, result: RunResult) -> None:
