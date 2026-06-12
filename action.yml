@@ -1,0 +1,25 @@
+name: "DocPulse"
+description: "Detect doc sections invalidated by a PR's code changes and propose fixes."
+branding:
+  icon: "activity"
+  color: "purple"
+inputs:
+  mode:
+    description: "check (comment on drift) or repair (also open a companion fix PR)"
+    required: false
+    default: "check"
+  config-path:
+    description: "Path to docpulse.yml, relative to the repo root"
+    required: false
+    default: "docpulse.yml"
+  base-ref:
+    description: "Base git ref to diff against (defaults to origin/<PR base branch>)"
+    required: false
+    default: ""
+runs:
+  using: "docker"
+  image: "Dockerfile"
+  env:
+    DOCPULSE_MODE: ${{ inputs.mode }}
+    DOCPULSE_CONFIG: ${{ inputs.config-path }}
+    DOCPULSE_BASE_REF: ${{ inputs.base-ref }}
