@@ -158,21 +158,25 @@ class RepoMarkdownDestination:
         return FixPlan(branch, commit_message, pr_title, pr_body, file_writes, commands)
 
     def publish_fix(self, result: RunResult) -> str:
-        """Dry-run: return the planned branch name without running any command.
+        """Open the companion fix PR.
 
-        Phase 6 will execute `plan.commands` (and write `plan.file_writes`) here
-        when `dry_run` is False.
+        Dry-run: returns the planned branch name without running anything.
+        Live: writes the doc edits, runs the git/gh commands (a failing command
+        raises via the checked runner), and returns the created PR URL.
         """
         plan = self.build_fix_plan(result)
         if plan is None:
             return ""
         if self.dry_run:
             return plan.branch
-        # Phase 6 live path. NOTE: writes+commands are not atomic — a failure
-        # mid-way leaves the working tree partially modified. Phase 6 should
-        # stage to a temp area or add cleanup before shipping this.
+        # Live path. NOTE: writes+commands are not atomic — a failure mid-way
+        # leaves the working tree partially modified; recoverable because all
+        # changes land on the fresh `docpulse/fix-<sha>` branch.
         for path, new_text in plan.file_writes.items():
             (self.root / path).write_text(new_text)
+        pr_url = ""
         for command in plan.commands:
-            self.run_command(command)
-        return plan.branch
+            out = self.run_command(command)
+            if command[:3] == ["gh", "pr", "create"]:
+                pr_url = out.strip()
+        return pr_url or plan.branch

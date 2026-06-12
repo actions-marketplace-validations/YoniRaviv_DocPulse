@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 
 from docpulse.config import Config, DocGlob
@@ -268,3 +269,48 @@ def test_fix_plan_omits_base_branch_when_unset(tmp_path):
     plan = dest.build_fix_plan(_fixable_result(section))
     pr_create = [c for c in plan.commands if c[:3] == ["gh", "pr", "create"]][0]
     assert "--base" not in pr_create
+
+
+def test_publish_fix_live_runs_commands_in_order_and_returns_url(tmp_path):
+    md = tmp_path / "docs" / "auth.md"
+    md.parent.mkdir(parents=True)
+    md.write_text("# login\nold\n")
+    section = DocSection(id="docs/auth.md#login", path="docs/auth.md",
+                         heading_path=["login"], content="# login\nold",
+                         content_hash="h", mentions=[], start_line=1, end_line=2)
+    calls = []
+
+    def fake_runner(args):
+        calls.append(args)
+        return "https://github.com/o/r/pull/7\n" if args[:3] == ["gh", "pr", "create"] else ""
+
+    dest = RepoMarkdownDestination(
+        root=tmp_path, sections_by_id={section.id: section},
+        config=Config(docs=[DocGlob(path="**/*.md")]), head_sha="abcdef1234567890",
+        run_command=fake_runner, dry_run=False, base_branch="main",
+    )
+    url = dest.publish_fix(_fixable_result(section))
+    assert url == "https://github.com/o/r/pull/7"
+    assert md.read_text().splitlines()[:2] == ["# login", "fixed"]  # file written
+    assert calls[0][:2] == ["git", "checkout"]          # branch created first
+    assert calls[-1][:3] == ["gh", "pr", "create"]       # PR created last
+
+
+def test_publish_fix_live_propagates_runner_error(tmp_path):
+    md = tmp_path / "docs" / "auth.md"
+    md.parent.mkdir(parents=True)
+    md.write_text("# login\nold\n")
+    section = DocSection(id="docs/auth.md#login", path="docs/auth.md",
+                         heading_path=["login"], content="# login\nold",
+                         content_hash="h", mentions=[], start_line=1, end_line=2)
+
+    def boom(args):
+        raise RuntimeError("no write permission")
+
+    dest = RepoMarkdownDestination(
+        root=tmp_path, sections_by_id={section.id: section},
+        config=Config(docs=[DocGlob(path="**/*.md")]), head_sha="abcdef1234567890",
+        run_command=boom, dry_run=False,
+    )
+    with pytest.raises(RuntimeError, match="no write permission"):
+        dest.publish_fix(_fixable_result(section))
