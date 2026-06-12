@@ -1,4 +1,5 @@
 import difflib
+import os
 import re
 import shlex
 import subprocess
@@ -6,6 +7,7 @@ from pathlib import Path
 
 import typer
 
+from docpulse.command_runner import checked_runner
 from docpulse.config import Config, DocGlob, load_config
 from docpulse.context.git_context import GitContext
 from docpulse.destinations.repo_markdown import RepoMarkdownDestination
@@ -52,6 +54,17 @@ def _pr_number(env: dict[str, str]) -> str | None:
         return explicit
     match = re.match(r"refs/pull/(\d+)/", env.get("GITHUB_REF", ""))
     return match.group(1) if match else None
+
+
+def _build_destination(
+    *, root: Path, sections_by_id, config, head_sha, dry_run, base_branch=None, pr_number=None
+):
+    run_command = checked_runner(root) if not dry_run else None
+    return RepoMarkdownDestination(
+        root, sections_by_id, config, head_sha,
+        run_command=run_command, dry_run=dry_run,
+        base_branch=base_branch, pr_number=pr_number,
+    )
 
 
 @app.command("index")
@@ -101,6 +114,9 @@ def check(
     two_dot: bool = typer.Option(
         False, "--two-dot", help="Diff literal base..head instead of merge-base base...head"
     ),
+    push: bool = typer.Option(
+        False, "--push", help="Live: post the flag comment to the PR (needs gh + GH_TOKEN)"
+    ),
 ) -> None:
     """Verify doc sections against base..head and report drift (exit 1 on stale)."""
     index_path = root / ".docpulse" / "index.json"
@@ -139,10 +155,20 @@ def check(
     except RuntimeError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
-    dest = RepoMarkdownDestination(
-        root, {s.id: s for s in index.sections}, config, _head_commit(root)
+    dest = _build_destination(
+        root=root, sections_by_id={s.id: s for s in index.sections},
+        config=config, head_sha=_head_commit(root),
+        dry_run=not push, pr_number=_pr_number(dict(os.environ)),
     )
-    dest.publish_findings(result)
+    try:
+        dest.publish_findings(result)
+    except RuntimeError as exc:
+        typer.echo(
+            f"live publish failed: {exc}\n"
+            "hint: ensure gh is installed and GH_TOKEN has pull-requests:write",
+            err=True,
+        )
+        raise typer.Exit(2) from exc
     dest.summarize(result)
     raise typer.Exit(result.exit_code)
 
