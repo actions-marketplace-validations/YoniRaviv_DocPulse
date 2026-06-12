@@ -31,9 +31,12 @@ jobs:
           mode: repair          # or "check" to comment-only
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCPULSE_PR_NUMBER: ${{ github.event.pull_request.number }}
 ```
+
+Embeddings improve link recall and need an embedding key (`OPENAI_API_KEY`). To run without one, set the action input `heuristics-only: true` — linking then uses name mentions only.
 
 In `repair` mode DocPulse commits the doc fix straight onto your PR's branch, so the fix lands in the same PR (same-repo PRs only — DocPulse can't push to a fork, so use `mode: check` for fork-based contributions).
 

@@ -27,5 +27,10 @@ if [ "$LAST_AUTHOR_EMAIL" = "$BOT_EMAIL" ]; then
   exit 0
 fi
 
-docpulse index --root "$WORK" --config "$WORK/$CONFIG"
+INDEX_FLAGS=""
+if [ "${DOCPULSE_HEURISTICS_ONLY:-false}" = "true" ]; then
+  INDEX_FLAGS="--heuristics-only"
+fi
+# shellcheck disable=SC2086
+docpulse index --root "$WORK" --config "$WORK/$CONFIG" $INDEX_FLAGS
 exec docpulse "$MODE" --base "$BASE" --root "$WORK" --config "$WORK/$CONFIG" --push

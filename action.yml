@@ -16,6 +16,10 @@ inputs:
     description: "Base git ref to diff against (defaults to origin/<PR base branch>)"
     required: false
     default: ""
+  heuristics-only:
+    description: "Skip embeddings; build the link graph from name mentions only (no embedding API key needed)"
+    required: false
+    default: "false"
 runs:
   using: "docker"
   image: "Dockerfile"
@@ -23,3 +27,4 @@ runs:
     DOCPULSE_MODE: ${{ inputs.mode }}
     DOCPULSE_CONFIG: ${{ inputs.config-path }}
     DOCPULSE_BASE_REF: ${{ inputs.base-ref }}
+    DOCPULSE_HEURISTICS_ONLY: ${{ inputs.heuristics-only }}
