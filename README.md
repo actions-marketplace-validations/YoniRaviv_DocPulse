@@ -35,7 +35,7 @@ jobs:
           DOCPULSE_PR_NUMBER: ${{ github.event.pull_request.number }}
 ```
 
-In `repair` mode DocPulse commits the doc fix straight onto your PR's branch (same-repo PRs). For fork PRs it falls back to a flag comment, since it can't push to the fork.
+In `repair` mode DocPulse commits the doc fix straight onto your PR's branch, so the fix lands in the same PR (same-repo PRs only — DocPulse can't push to a fork, so use `mode: check` for fork-based contributions).
 
 Add a `docpulse.yml` at your repo root (see [Configuration](#configuration)).
 
@@ -46,7 +46,7 @@ uv tool install docpulse                              # or: pipx install docpuls
 docpulse index --root .                               # build the code<->docs link index
 docpulse check  --base origin/main                    # verify docs vs the PR diff (exit 1 on drift)
 docpulse check  --base origin/main --suspects-only    # keyless: list suspect sections only
-docpulse repair --base origin/main                    # print proposed fixes + the dry-run PR plan
+docpulse repair --base origin/main                    # print proposed fixes + the dry-run commit plan
 docpulse repair --base origin/main --write            # apply fixes to doc files locally (no push)
 docpulse repair --base origin/main --push             # commit+push doc fixes onto the current branch (needs GH_TOKEN)
 ```

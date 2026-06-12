@@ -13,7 +13,7 @@ class FixPlan:
     """The doc-sync commit plan: file rewrites + the git commands to land them.
 
     `--push` commits these doc edits onto the current branch and pushes, so the
-    fix lands in the same PR (no separate companion PR).
+    fix lands in the same PR via the doc-sync commit.
     """
 
     commit_message: str
@@ -104,11 +104,11 @@ class RepoMarkdownDestination:
             print(comment)
 
     def summarize(self, result: RunResult) -> None:
-        fix_ref = None if self.dry_run else "committed to branch"
-        print(render_summary(result, fix_ref=fix_ref))
+        committed = not self.dry_run and any(r.validation_passed for r in result.repairs)
+        print(render_summary(result, fix_ref="committed to branch" if committed else None))
 
-    def _routed_for_pr(self, result: RunResult) -> list[tuple[Repair, Tier]]:
-        """(repair, tier) pairs whose tier means 'include in the companion PR'."""
+    def _routed_for_commit(self, result: RunResult) -> list[tuple[Repair, Tier]]:
+        """(repair, tier) pairs whose tier warrants inclusion in the doc-sync commit."""
         verdicts = {v.section_id: v for v in result.verdicts}
         out: list[tuple[Repair, Tier]] = []
         for repair_obj in result.repairs:
@@ -122,7 +122,7 @@ class RepoMarkdownDestination:
 
     def build_fix_plan(self, result: RunResult) -> "FixPlan | None":
         """Plan the doc-sync commit, or None if nothing is applyable."""
-        applied = self._routed_for_pr(result)
+        applied = self._routed_for_commit(result)
         if not applied:
             return None
         edits_by_path: dict[str, list[tuple[DocSection, str]]] = {}

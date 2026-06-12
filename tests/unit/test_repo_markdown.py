@@ -124,7 +124,7 @@ def test_build_fix_plan_groups_edits_and_routes(tmp_path):
     assert ["git", "add", "docs/auth.md"] in plan.commands
     assert ["git", "commit", "-m", plan.commit_message] in plan.commands
     assert ["git", "push", "origin", "HEAD"] in plan.commands
-    # no companion-PR commands
+    # no gh pr create or branch-checkout commands (doc-sync commit only)
     assert not any(c[:3] == ["gh", "pr", "create"] for c in plan.commands)
     assert not any(c[:3] == ["git", "checkout", "-b"] for c in plan.commands)
 
@@ -261,7 +261,7 @@ def test_publish_fix_live_commits_and_pushes(tmp_path):
         run_command=fake_runner, dry_run=False,
     )
     commit_msg = dest.publish_fix(_fixable_result(section))
-    assert "DocPulse" in commit_msg  # returns the commit message
+    assert commit_msg == "docs: sync stale sections with code changes (DocPulse)"  # returns the commit message
     assert md.read_text().splitlines()[:2] == ["# login", "fixed"]  # file written
     # first command(s) are git add
     assert calls[0][:2] == ["git", "add"]
