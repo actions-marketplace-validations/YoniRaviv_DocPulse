@@ -87,10 +87,11 @@ local development is never affected:
   diff path then raises a clear error if the ref is still missing.
 - `loop_guard(root, bot_email) -> bool` — True when HEAD's author email equals the
   bot's. Consulted on the `repair --push` path only; the command then exits 0.
-- `ensure_commit_identity(root, runner, name, email) -> None` — if the repo has no
-  `user.email` configured, set a **repo-local** (not `--global`) bot identity.
-  Called inside `publish_fix` immediately before the commit, so it never leaks to
-  other repos on a shared agent.
+- Bot-authored commit — the doc-sync commit must be authored by the bot email so
+  the loop guard can recognize it. The commit command carries the identity inline
+  (`git -c user.name=<name> -c user.email=<email> commit …`); this guarantees bot
+  authorship deterministically with **no git-config mutation** (preferred over a
+  separate `ensure_commit_identity` that mutated repo-local config).
 
 Bot identity is resolved from environment variables via a `_bot_identity(env)`
 helper in `cli.py` (alongside `_pr_number`):
@@ -108,7 +109,8 @@ schema churn.
 3. `resolve_base_ref(root, base)`
 4. existing flow
 
-`ensure_commit_identity` is invoked inside `publish_fix`, just before commit.
+The bot identity is threaded into `RepoMarkdownDestination` and baked into the
+commit command built by `build_fix_plan`.
 
 ### Component 3 — `entrypoint.sh` slims down
 
@@ -156,8 +158,8 @@ daemon-based `docker run` recipe for CI that has a Docker daemon.
   - `resolve_base_ref`: ref already resolves → no fetch; missing → fetch invoked
     with the parsed remote/branch.
   - `loop_guard`: HEAD author email == bot → True; human author → False.
-  - `ensure_commit_identity`: unset → sets repo-local identity; already set → no-op;
-    asserts `--global` is never used.
+  - bot-authored commit: `build_fix_plan`'s commit command carries
+    `-c user.name=<bot> -c user.email=<bot>`.
   - `ensure_safe_directory`: simulated dubious-ownership error → adds
     `safe.directory`; clean probe → no-op.
 - Destination tests:
