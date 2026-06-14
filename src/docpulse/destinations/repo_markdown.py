@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from docpulse.command_runner import CommandRunner, default_runner
 from docpulse.config import Config
@@ -54,7 +55,9 @@ def replace_sections(file_text: str, edits: list[tuple[DocSection, str]]) -> str
 class RepoMarkdownDestination:
     """Repo-markdown destination: flag comment + a doc-sync commit.
 
-    `publish_findings` posts (live) or prints the flag comment. In `--push`
+    `publish_findings` writes the flag comment to a portable artifact file when
+    `comment_out` is set, posts it to the PR via `gh` when `comment_via="gh"` and
+    live with a PR number, and otherwise prints it. In `--push`
     (live) mode `publish_fix` commits the doc fixes onto the current branch and
     pushes; dry-run only builds the plan. `summarize` prints the health line.
     """
@@ -68,6 +71,10 @@ class RepoMarkdownDestination:
         run_command: CommandRunner | None = None,
         dry_run: bool = True,
         pr_number: str | None = None,
+        comment_out: Path | None = None,
+        comment_via: Literal["gh", "none"] = "gh",
+        bot_name: str = "docpulse[bot]",
+        bot_email: str = "docpulse-bot@users.noreply.github.com",
     ) -> None:
         self.root = root
         self.sections_by_id = sections_by_id
@@ -76,6 +83,10 @@ class RepoMarkdownDestination:
         self.run_command = run_command or default_runner(root)
         self.dry_run = dry_run
         self.pr_number = pr_number
+        self.comment_out = comment_out
+        self.comment_via = comment_via
+        self.bot_name = bot_name
+        self.bot_email = bot_email
 
     def flag_comment(self, result: RunResult) -> str:
         """Markdown comment listing stale sections at/above flag_threshold."""
@@ -123,10 +134,14 @@ class RepoMarkdownDestination:
         comment = self.flag_comment(result)
         if not comment:
             return
-        if not self.dry_run and self.pr_number:
+        if self.comment_out is not None:
+            self.comment_out.parent.mkdir(parents=True, exist_ok=True)
+            self.comment_out.write_text(comment)
+        if self.comment_via == "gh" and not self.dry_run and self.pr_number:
             self.run_command(["gh", "pr", "comment", self.pr_number, "--body", comment])
-        else:
-            print(comment)
+            return  # posted to the PR; stdout not needed
+        if self.comment_out is None:
+            print(comment)  # no artifact + not posted -> log it
 
     def summarize(self, result: RunResult) -> None:
         committed = not self.dry_run and any(r.validation_passed for r in result.repairs)
@@ -167,7 +182,8 @@ class RepoMarkdownDestination:
         commit_message = "docs: sync stale sections with code changes (DocPulse)"
         commands = [
             *[["git", "add", path] for path in sorted(file_writes)],
-            ["git", "commit", "-m", commit_message],
+            ["git", "-c", f"user.name={self.bot_name}",
+             "-c", f"user.email={self.bot_email}", "commit", "-m", commit_message],
             ["git", "push", "origin", "HEAD"],
         ]
         return FixPlan(

@@ -1,12 +1,21 @@
 import subprocess
 
+import pytest
 from typer.testing import CliRunner
 
 import docpulse.cli as cli_mod
-from docpulse.cli import _pr_number, app
+from docpulse.cli import _bot_identity, _pr_number, app
 from docpulse.models import RunResult
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _stub_ci_prep(monkeypatch):
+    """CLI tests exercise wiring, not ci behavior (covered in test_ci.py).
+    Stub the subprocess-backed self-prep so these stay hermetic and fast."""
+    monkeypatch.setattr(cli_mod.ci, "ensure_safe_directory", lambda root: None)
+    monkeypatch.setattr(cli_mod.ci, "resolve_base_ref", lambda root, base: None)
 
 
 def test_pr_number_explicit_env():
@@ -20,6 +29,26 @@ def test_pr_number_from_github_ref():
 
 def test_pr_number_none_when_absent():
     assert _pr_number({}) is None
+
+
+def test_bot_identity_defaults():
+    name, email = _bot_identity({})
+    assert name == "docpulse[bot]"
+    assert email == "docpulse-bot@users.noreply.github.com"
+
+
+def test_bot_identity_env_override():
+    name, email = _bot_identity(
+        {"DOCPULSE_BOT_NAME": "Custom Bot", "DOCPULSE_BOT_EMAIL": "bot@corp.test"}
+    )
+    assert name == "Custom Bot"
+    assert email == "bot@corp.test"
+
+
+def test_bot_identity_partial_override():
+    name, email = _bot_identity({"DOCPULSE_BOT_NAME": "MyBot"})
+    assert name == "MyBot"
+    assert email == "docpulse-bot@users.noreply.github.com"
 
 
 class _FakeDest:
@@ -92,3 +121,84 @@ def test_repair_push_commits_to_branch(tmp_path, monkeypatch):
     assert result.exit_code == 1, result.output     # drift exit preserved
     assert _FakeDest.last["dry_run"] is False
     assert "pushed a doc-sync commit" in result.output
+
+
+def test_repair_push_skips_when_head_is_bot_commit(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    # make the loop guard fire regardless of the repo's real HEAD
+    monkeypatch.setattr(cli_mod.ci, "loop_guard", lambda root, email: True)
+    monkeypatch.setattr(cli_mod, "_build_destination", lambda **kw: _FakeDest(**kw))
+    monkeypatch.setattr(cli_mod, "LLMClient", lambda model: object())
+    called = {"pipeline": False}
+
+    def _pipeline(*a, **k):
+        called["pipeline"] = True
+        raise AssertionError("pipeline must not run when the loop guard fires")
+
+    monkeypatch.setattr(cli_mod, "run_pipeline", _pipeline)
+    result = runner.invoke(
+        app, ["repair", "--base", "origin/main", "--root", str(repo), "--push"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "skipping to avoid a loop" in result.output
+    assert called["pipeline"] is False
+
+
+def test_check_push_skips_when_head_is_bot_commit(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    monkeypatch.setattr(cli_mod.ci, "loop_guard", lambda root, email: True)
+    monkeypatch.setattr(cli_mod, "_build_destination", lambda **kw: _FakeDest(**kw))
+    monkeypatch.setattr(cli_mod, "LLMClient", lambda model: object())
+    called = {"pipeline": False}
+
+    def _pipeline(*a, **k):
+        called["pipeline"] = True
+        raise AssertionError("pipeline must not run when the loop guard fires")
+
+    monkeypatch.setattr(cli_mod, "run_pipeline", _pipeline)
+    result = runner.invoke(
+        app, ["check", "--base", "origin/main", "--root", str(repo), "--push"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "skipping to avoid a loop" in result.output
+    assert called["pipeline"] is False
+
+
+def test_check_passes_comment_options_to_destination(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    monkeypatch.setattr(cli_mod, "_build_destination", lambda **kw: _FakeDest(**kw))
+    monkeypatch.setattr(cli_mod, "LLMClient", lambda model: object())
+    monkeypatch.setattr(
+        cli_mod, "run_pipeline",
+        lambda *a, **k: RunResult(verdicts=[], repairs=[], suspects_checked=0,
+                                  suspects_total=0, tokens_used=0, exit_code=0),
+    )
+    monkeypatch.setattr(cli_mod, "GitContext", lambda *a, **k: type("C", (), {"get_intent": lambda self: ""})())
+    out = tmp_path / "flag.md"
+    result = runner.invoke(app, [
+        "check", "--base", "origin/main", "--root", str(repo),
+        "--comment-out", str(out), "--comment-via", "none",
+    ])
+    assert result.exit_code == 0, result.output
+    assert _FakeDest.last["comment_out"] == out
+    assert _FakeDest.last["comment_via"] == "none"
+
+
+def test_repair_passes_comment_options_to_destination(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    monkeypatch.setattr(cli_mod, "_build_destination", lambda **kw: _FakeDest(**kw))
+    monkeypatch.setattr(cli_mod, "LLMClient", lambda model: object())
+    monkeypatch.setattr(
+        cli_mod, "run_pipeline",
+        lambda *a, **k: RunResult(verdicts=[], repairs=[], suspects_checked=0,
+                                  suspects_total=0, tokens_used=0, exit_code=0),
+    )
+    monkeypatch.setattr(cli_mod, "GitContext", lambda *a, **k: type("C", (), {"get_intent": lambda self: ""})())
+    out = tmp_path / "flag.md"
+    result = runner.invoke(app, [
+        "repair", "--base", "origin/main", "--root", str(repo),
+        "--comment-out", str(out), "--comment-via", "none",
+    ])
+    assert result.exit_code == 0, result.output
+    assert _FakeDest.last["comment_out"] == out
+    assert _FakeDest.last["comment_via"] == "none"

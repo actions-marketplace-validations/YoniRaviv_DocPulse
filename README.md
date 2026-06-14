@@ -134,3 +134,34 @@ docker run --rm \
 Set `DOCPULSE_PR_NUMBER` to your CI's PR/MR number so the flag comment is posted to
 the PR (without it, the comment is only printed to the log). Drop
 `DOCPULSE_HEURISTICS_ONLY` and add `-e OPENAI_API_KEY` to use embedding-based linking.
+
+### Kubernetes (no Docker daemon)
+
+A Jenkins agent that is itself a K8s pod has no Docker daemon, so `docker run`
+won't work. Run DocPulse as a **pod sidecar container** (or `uv tool install
+docpulse` / `pipx install docpulse` into the agent image) and call the CLI
+directly — it self-preps (git `safe.directory`, base-ref fetch on shallow
+checkouts, and the push loop guard), so no entrypoint wrapper is needed:
+
+```groovy
+container('docpulse') {
+  sh '''
+    docpulse index --root .
+    docpulse check --base "origin/$CHANGE_TARGET" --comment-via none --comment-out docpulse-flag.md
+  '''
+}
+// then post docpulse-flag.md with your SCM's Jenkins plugin (GitHub/GitLab/Bitbucket)
+```
+
+`--comment-out` writes the flag comment as portable markdown so **any** host's CI
+posts it natively — DocPulse stays out of the per-vendor comment-API business.
+GitHub users can instead let DocPulse post directly (the default `--comment-via
+gh`, given `gh` + `GH_TOKEN` + `DOCPULSE_PR_NUMBER`); other hosts pass
+`--comment-via none`. `repair --push` works on any host — it commits the doc-sync
+fix with `git -c user.*` (bot-authored, so the loop guard catches it) and pushes
+with the credentials your checkout already configured.
+
+Map your CI's variables: Jenkins exposes the base branch as `$CHANGE_TARGET` and
+the PR/MR number as `$CHANGE_ID` (set `DOCPULSE_PR_NUMBER="$CHANGE_ID"` for `gh`
+posting). The bot identity is overridable via `DOCPULSE_BOT_NAME` /
+`DOCPULSE_BOT_EMAIL`.
