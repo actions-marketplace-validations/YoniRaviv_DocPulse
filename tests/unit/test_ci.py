@@ -99,3 +99,39 @@ def test_ensure_safe_directory_noop_on_clean_repo(tmp_path):
         capture_output=True, text=True,
     ).stdout
     assert before == after
+
+
+def test_ensure_safe_directory_adds_on_dubious_ownership(tmp_path, monkeypatch):
+    abs_root = str(tmp_path.resolve())
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args[:2] == ["git", "rev-parse"]:
+            return type("R", (), {"returncode": 1, "stdout": "",
+                                  "stderr": "fatal: detected dubious ownership in repository at '/work'"})()
+        if args[:4] == ["git", "config", "--global", "--get-all"]:
+            return type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})()
+        return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    monkeypatch.setattr(ci.subprocess, "run", fake_run)
+    ensure_safe_directory(tmp_path)
+    assert ["git", "config", "--global", "--add", "safe.directory", abs_root] in calls
+
+
+def test_ensure_safe_directory_idempotent_when_already_trusted(tmp_path, monkeypatch):
+    abs_root = str(tmp_path.resolve())
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args[:2] == ["git", "rev-parse"]:
+            return type("R", (), {"returncode": 1, "stdout": "",
+                                  "stderr": "detected dubious ownership"})()
+        if args[:4] == ["git", "config", "--global", "--get-all"]:
+            return type("R", (), {"returncode": 0, "stdout": abs_root + "\n", "stderr": ""})()
+        return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    monkeypatch.setattr(ci.subprocess, "run", fake_run)
+    ensure_safe_directory(tmp_path)
+    assert not any(a[:4] == ["git", "config", "--global", "--add"] for a in calls)

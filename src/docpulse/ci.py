@@ -73,18 +73,22 @@ def ensure_safe_directory(root: Path) -> None:
     container case), where git otherwise refuses every operation with a
     'dubious ownership' error. Adds the path to the global safe.directory list
     (idempotently) only when that error is detected, so local dev is untouched.
+
+    Best-effort: if the global config write itself fails, it is swallowed and
+    the subsequent git operation surfaces the original error.
     """
+    resolved_root = Path(root).resolve()
     try:
         probe = subprocess.run(
             ["git", "rev-parse", "--git-dir"],
-            cwd=root, capture_output=True, encoding="utf-8", errors="replace",
-            timeout=5,
+            cwd=resolved_root, capture_output=True, encoding="utf-8",
+            errors="replace", timeout=5,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return
     if probe.returncode == 0 or not _is_dubious_ownership(probe.stderr or ""):
         return
-    abs_root = str(Path(root).resolve())
+    abs_root = str(resolved_root)
     try:
         existing = subprocess.run(
             ["git", "config", "--global", "--get-all", "safe.directory"],
