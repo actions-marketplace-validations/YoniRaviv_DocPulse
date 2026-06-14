@@ -3,9 +3,9 @@ import os
 import re
 import shlex
 import subprocess
+from enum import Enum
 from pathlib import Path
 
-import click
 import typer
 
 from docpulse import ci
@@ -31,6 +31,11 @@ app = typer.Typer(
 
 _DEFAULT_BOT_NAME = "docpulse[bot]"
 _DEFAULT_BOT_EMAIL = "docpulse-bot@users.noreply.github.com"
+
+
+class CommentVia(str, Enum):
+    gh = "gh"
+    none = "none"
 
 
 @app.callback()
@@ -136,8 +141,8 @@ def check(
         None, "--comment-out", help="Write the flag-comment markdown to this file "
         "(any host's CI can post it)"
     ),
-    comment_via: str = typer.Option(
-        "gh", "--comment-via", click_type=click.Choice(["gh", "none"]),
+    comment_via: CommentVia = typer.Option(
+        CommentVia.gh, "--comment-via",
         help="Post the comment via 'gh' (GitHub, default) or 'none'",
     ),
 ) -> None:
@@ -225,8 +230,8 @@ def repair_cmd(
         None, "--comment-out", help="Write the flag-comment markdown to this file "
         "(any host's CI can post it)"
     ),
-    comment_via: str = typer.Option(
-        "gh", "--comment-via", click_type=click.Choice(["gh", "none"]),
+    comment_via: CommentVia = typer.Option(
+        CommentVia.gh, "--comment-via",
         help="Post the comment via 'gh' (GitHub, default) or 'none'",
     ),
 ) -> None:
