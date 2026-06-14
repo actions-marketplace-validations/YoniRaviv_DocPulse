@@ -55,7 +55,9 @@ def replace_sections(file_text: str, edits: list[tuple[DocSection, str]]) -> str
 class RepoMarkdownDestination:
     """Repo-markdown destination: flag comment + a doc-sync commit.
 
-    `publish_findings` posts (live) or prints the flag comment. In `--push`
+    `publish_findings` writes the flag comment to a portable artifact file when
+    `comment_out` is set, posts it to the PR via `gh` when `comment_via="gh"` and
+    live with a PR number, and otherwise prints it. In `--push`
     (live) mode `publish_fix` commits the doc fixes onto the current branch and
     pushes; dry-run only builds the plan. `summarize` prints the health line.
     """
@@ -133,6 +135,7 @@ class RepoMarkdownDestination:
         if not comment:
             return
         if self.comment_out is not None:
+            self.comment_out.parent.mkdir(parents=True, exist_ok=True)
             self.comment_out.write_text(comment)
         if self.comment_via == "gh" and not self.dry_run and self.pr_number:
             self.run_command(["gh", "pr", "comment", self.pr_number, "--body", comment])

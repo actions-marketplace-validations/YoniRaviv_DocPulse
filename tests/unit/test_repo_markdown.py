@@ -269,7 +269,7 @@ def test_publish_findings_writes_comment_out_file(tmp_path):
     assert "param renamed" in out.read_text()
 
 
-def test_publish_findings_comment_via_none_skips_gh():
+def test_publish_findings_comment_via_none_skips_gh(capsys):
     section = _section()
     calls = []
     dest = RepoMarkdownDestination(
@@ -280,6 +280,7 @@ def test_publish_findings_comment_via_none_skips_gh():
     )
     dest.publish_findings(_stale_result(section))
     assert calls == []  # gh never invoked when comment_via='none'
+    assert "param renamed" in capsys.readouterr().out  # falls through to stdout
 
 
 def test_build_fix_plan_commit_is_bot_authored(tmp_path):
@@ -290,7 +291,7 @@ def test_build_fix_plan_commit_is_bot_authored(tmp_path):
     dest = RepoMarkdownDestination(
         root=tmp_path, sections_by_id={section.id: section},
         config=Config(docs=[DocGlob(path="**/*.md")]), head_sha="abcdef1234567890",
-        bot_name="docpulse[bot]", bot_email="docpulse-bot@users.noreply.github.com",
+        bot_name="custom-bot", bot_email="custom@example.com",
     )
     result = RunResult(
         verdicts=[Verdict(section_id=section.id, status="stale", confidence=0.95,
@@ -302,8 +303,8 @@ def test_build_fix_plan_commit_is_bot_authored(tmp_path):
     )
     plan = dest.build_fix_plan(result)
     assert [
-        "git", "-c", "user.name=docpulse[bot]",
-        "-c", "user.email=docpulse-bot@users.noreply.github.com",
+        "git", "-c", "user.name=custom-bot",
+        "-c", "user.email=custom@example.com",
         "commit", "-m", plan.commit_message,
     ] in plan.commands
 
