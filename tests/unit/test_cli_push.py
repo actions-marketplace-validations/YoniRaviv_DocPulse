@@ -112,3 +112,44 @@ def test_repair_push_commits_to_branch(tmp_path, monkeypatch):
     assert result.exit_code == 1, result.output     # drift exit preserved
     assert _FakeDest.last["dry_run"] is False
     assert "pushed a doc-sync commit" in result.output
+
+
+def test_repair_push_skips_when_head_is_bot_commit(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    # make the loop guard fire regardless of the repo's real HEAD
+    monkeypatch.setattr(cli_mod.ci, "loop_guard", lambda root, email: True)
+    monkeypatch.setattr(cli_mod, "_build_destination", lambda **kw: _FakeDest(**kw))
+    monkeypatch.setattr(cli_mod, "LLMClient", lambda model: object())
+    called = {"pipeline": False}
+
+    def _pipeline(*a, **k):
+        called["pipeline"] = True
+        raise AssertionError("pipeline must not run when the loop guard fires")
+
+    monkeypatch.setattr(cli_mod, "run_pipeline", _pipeline)
+    result = runner.invoke(
+        app, ["repair", "--base", "origin/main", "--root", str(repo), "--push"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "skipping to avoid a loop" in result.output
+    assert called["pipeline"] is False
+
+
+def test_check_passes_comment_options_to_destination(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    monkeypatch.setattr(cli_mod, "_build_destination", lambda **kw: _FakeDest(**kw))
+    monkeypatch.setattr(cli_mod, "LLMClient", lambda model: object())
+    monkeypatch.setattr(
+        cli_mod, "run_pipeline",
+        lambda *a, **k: RunResult(verdicts=[], repairs=[], suspects_checked=0,
+                                  suspects_total=0, tokens_used=0, exit_code=0),
+    )
+    monkeypatch.setattr(cli_mod, "GitContext", lambda *a, **k: type("C", (), {"get_intent": lambda self: ""})())
+    out = tmp_path / "flag.md"
+    result = runner.invoke(app, [
+        "check", "--base", "origin/main", "--root", str(repo),
+        "--comment-out", str(out), "--comment-via", "none",
+    ])
+    assert result.exit_code == 0, result.output
+    assert _FakeDest.last["comment_out"] == out
+    assert _FakeDest.last["comment_via"] == "none"

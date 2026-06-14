@@ -7,6 +7,7 @@ from pathlib import Path
 
 import typer
 
+from docpulse import ci
 from docpulse.command_runner import checked_runner
 from docpulse.config import Config, DocGlob, load_config
 from docpulse.context.git_context import GitContext
@@ -67,13 +68,16 @@ def _bot_identity(env: dict[str, str]) -> tuple[str, str]:
 
 
 def _build_destination(
-    *, root: Path, sections_by_id, config, head_sha, dry_run, pr_number=None
+    *, root: Path, sections_by_id, config, head_sha, dry_run, pr_number=None,
+    comment_out=None, comment_via="gh", bot_name="docpulse[bot]",
+    bot_email="docpulse-bot@users.noreply.github.com",
 ):
     run_command = checked_runner(root) if not dry_run else None
     return RepoMarkdownDestination(
         root, sections_by_id, config, head_sha,
-        run_command=run_command, dry_run=dry_run,
-        pr_number=pr_number,
+        run_command=run_command, dry_run=dry_run, pr_number=pr_number,
+        comment_out=comment_out, comment_via=comment_via,
+        bot_name=bot_name, bot_email=bot_email,
     )
 
 
@@ -127,6 +131,13 @@ def check(
     push: bool = typer.Option(
         False, "--push", help="Live: post the flag comment to the PR (needs gh + GH_TOKEN)"
     ),
+    comment_out: Path | None = typer.Option(
+        None, "--comment-out", help="Write the flag-comment markdown to this file "
+        "(any host's CI can post it)"
+    ),
+    comment_via: str = typer.Option(
+        "gh", "--comment-via", help="Post the comment via 'gh' (GitHub, default) or 'none'"
+    ),
 ) -> None:
     """Verify doc sections against base..head and report drift (exit 1 on stale)."""
     index_path = root / ".docpulse" / "index.json"
@@ -139,6 +150,10 @@ def check(
     except FileNotFoundError as exc:
         typer.echo(f"config not found: {exc.filename}", err=True)
         raise typer.Exit(2) from exc
+
+    bot_name, bot_email = _bot_identity(dict(os.environ))
+    ci.ensure_safe_directory(root)
+    ci.resolve_base_ref(root, base)
 
     if suspects_only:
         try:
@@ -169,6 +184,8 @@ def check(
         root=root, sections_by_id={s.id: s for s in index.sections},
         config=config, head_sha=_head_commit(root),
         dry_run=not push, pr_number=_pr_number(dict(os.environ)),
+        comment_out=comment_out, comment_via=comment_via,
+        bot_name=bot_name, bot_email=bot_email,
     )
     try:
         dest.publish_findings(result)
@@ -199,6 +216,13 @@ def repair_cmd(
     push: bool = typer.Option(
         False, "--push", help="Live: commit+push doc fixes onto the current branch (needs GH_TOKEN)"
     ),
+    comment_out: Path | None = typer.Option(
+        None, "--comment-out", help="Write the flag-comment markdown to this file "
+        "(any host's CI can post it)"
+    ),
+    comment_via: str = typer.Option(
+        "gh", "--comment-via", help="Post the comment via 'gh' (GitHub, default) or 'none'"
+    ),
 ) -> None:
     """Verify, repair stale sections, and print the dry-run fix plan."""
     index_path = root / ".docpulse" / "index.json"
@@ -211,6 +235,13 @@ def repair_cmd(
     except FileNotFoundError as exc:
         typer.echo(f"config not found: {exc.filename}", err=True)
         raise typer.Exit(2) from exc
+
+    bot_name, bot_email = _bot_identity(dict(os.environ))
+    ci.ensure_safe_directory(root)
+    if push and ci.loop_guard(root, bot_email):
+        typer.echo("DocPulse: latest commit is a DocPulse doc-sync; skipping to avoid a loop.")
+        raise typer.Exit(0)
+    ci.resolve_base_ref(root, base)
 
     try:
         client = LLMClient(model or config.resolve_repair_model())
@@ -232,6 +263,8 @@ def repair_cmd(
         config=config, head_sha=_head_commit(root),
         dry_run=not push,
         pr_number=_pr_number(dict(os.environ)),
+        comment_out=comment_out, comment_via=comment_via,
+        bot_name=bot_name, bot_email=bot_email,
     )
     try:
         dest.publish_findings(result)
