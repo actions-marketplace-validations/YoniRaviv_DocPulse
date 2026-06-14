@@ -62,3 +62,39 @@ def resolve_base_ref(root: Path, base: str) -> None:
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return
+
+
+def _is_dubious_ownership(stderr: str) -> bool:
+    return "dubious ownership" in stderr.lower()
+
+
+def ensure_safe_directory(root: Path) -> None:
+    """Trust `root` for git when it is owned by a different uid (the common
+    container case), where git otherwise refuses every operation with a
+    'dubious ownership' error. Adds the path to the global safe.directory list
+    (idempotently) only when that error is detected, so local dev is untouched.
+    """
+    try:
+        probe = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            cwd=root, capture_output=True, encoding="utf-8", errors="replace",
+            timeout=5,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return
+    if probe.returncode == 0 or not _is_dubious_ownership(probe.stderr or ""):
+        return
+    abs_root = str(Path(root).resolve())
+    try:
+        existing = subprocess.run(
+            ["git", "config", "--global", "--get-all", "safe.directory"],
+            capture_output=True, encoding="utf-8", errors="replace", timeout=5,
+        )
+        if abs_root in (existing.stdout or "").splitlines():
+            return
+        subprocess.run(
+            ["git", "config", "--global", "--add", "safe.directory", abs_root],
+            capture_output=True, encoding="utf-8", errors="replace", timeout=5,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return

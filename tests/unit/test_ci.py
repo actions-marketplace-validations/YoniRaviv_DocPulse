@@ -2,7 +2,7 @@ import subprocess
 from pathlib import Path
 
 import docpulse.ci as ci
-from docpulse.ci import loop_guard, resolve_base_ref
+from docpulse.ci import ensure_safe_directory, loop_guard, resolve_base_ref
 
 BOT = "docpulse-bot@users.noreply.github.com"
 
@@ -77,3 +77,25 @@ def test_resolve_base_ref_fetches_parsed_remote_branch(tmp_path, monkeypatch):
         "git", "fetch", "--no-tags", "--depth=50", "origin",
         "+refs/heads/feature/x:refs/remotes/origin/feature/x",
     ] in calls
+
+
+def test_is_dubious_ownership_detects_message():
+    assert ci._is_dubious_ownership(
+        "fatal: detected dubious ownership in repository at '/work'"
+    )
+    assert not ci._is_dubious_ownership("")
+    assert not ci._is_dubious_ownership("fatal: not a git repository")
+
+
+def test_ensure_safe_directory_noop_on_clean_repo(tmp_path):
+    repo = _repo_with_commit(tmp_path, "d@e.f")
+    before = subprocess.run(
+        ["git", "config", "--global", "--get-all", "safe.directory"],
+        capture_output=True, text=True,
+    ).stdout
+    ensure_safe_directory(repo)  # same-uid repo -> probe succeeds -> no mutation
+    after = subprocess.run(
+        ["git", "config", "--global", "--get-all", "safe.directory"],
+        capture_output=True, text=True,
+    ).stdout
+    assert before == after
