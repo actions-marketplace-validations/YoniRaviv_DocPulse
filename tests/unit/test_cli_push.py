@@ -144,6 +144,26 @@ def test_repair_push_skips_when_head_is_bot_commit(tmp_path, monkeypatch):
     assert called["pipeline"] is False
 
 
+def test_check_push_skips_when_head_is_bot_commit(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    monkeypatch.setattr(cli_mod.ci, "loop_guard", lambda root, email: True)
+    monkeypatch.setattr(cli_mod, "_build_destination", lambda **kw: _FakeDest(**kw))
+    monkeypatch.setattr(cli_mod, "LLMClient", lambda model: object())
+    called = {"pipeline": False}
+
+    def _pipeline(*a, **k):
+        called["pipeline"] = True
+        raise AssertionError("pipeline must not run when the loop guard fires")
+
+    monkeypatch.setattr(cli_mod, "run_pipeline", _pipeline)
+    result = runner.invoke(
+        app, ["check", "--base", "origin/main", "--root", str(repo), "--push"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "skipping to avoid a loop" in result.output
+    assert called["pipeline"] is False
+
+
 def test_check_passes_comment_options_to_destination(tmp_path, monkeypatch):
     repo = _init_repo(tmp_path)
     monkeypatch.setattr(cli_mod, "_build_destination", lambda **kw: _FakeDest(**kw))

@@ -5,6 +5,7 @@ import shlex
 import subprocess
 from pathlib import Path
 
+import click
 import typer
 
 from docpulse import ci
@@ -136,7 +137,8 @@ def check(
         "(any host's CI can post it)"
     ),
     comment_via: str = typer.Option(
-        "gh", "--comment-via", help="Post the comment via 'gh' (GitHub, default) or 'none'"
+        "gh", "--comment-via", click_type=click.Choice(["gh", "none"]),
+        help="Post the comment via 'gh' (GitHub, default) or 'none'",
     ),
 ) -> None:
     """Verify doc sections against base..head and report drift (exit 1 on stale)."""
@@ -153,6 +155,9 @@ def check(
 
     bot_name, bot_email = _bot_identity(dict(os.environ))
     ci.ensure_safe_directory(root)
+    if push and ci.loop_guard(root, bot_email):
+        typer.echo("DocPulse: latest commit is a DocPulse doc-sync; skipping to avoid a loop.")
+        raise typer.Exit(0)
     ci.resolve_base_ref(root, base)
 
     if suspects_only:
@@ -221,7 +226,8 @@ def repair_cmd(
         "(any host's CI can post it)"
     ),
     comment_via: str = typer.Option(
-        "gh", "--comment-via", help="Post the comment via 'gh' (GitHub, default) or 'none'"
+        "gh", "--comment-via", click_type=click.Choice(["gh", "none"]),
+        help="Post the comment via 'gh' (GitHub, default) or 'none'",
     ),
 ) -> None:
     """Verify, repair stale sections, and print the dry-run fix plan."""

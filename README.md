@@ -147,7 +147,7 @@ checkouts, and the push loop guard), so no entrypoint wrapper is needed:
 container('docpulse') {
   sh '''
     docpulse index --root .
-    docpulse check --base "origin/$CHANGE_TARGET" --comment-out docpulse-flag.md
+    docpulse check --base "origin/$CHANGE_TARGET" --comment-via none --comment-out docpulse-flag.md
   '''
 }
 // then post docpulse-flag.md with your SCM's Jenkins plugin (GitHub/GitLab/Bitbucket)

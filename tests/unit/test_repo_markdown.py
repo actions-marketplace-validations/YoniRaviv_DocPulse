@@ -283,6 +283,22 @@ def test_publish_findings_comment_via_none_skips_gh(capsys):
     assert "param renamed" in capsys.readouterr().out  # falls through to stdout
 
 
+def test_publish_findings_writes_artifact_and_posts_via_gh(tmp_path, capsys):
+    section = _section()
+    out = tmp_path / "flag.md"
+    calls = []
+    dest = RepoMarkdownDestination(
+        root=Path("."), sections_by_id={section.id: section},
+        config=Config(docs=[DocGlob(path="**/*.md")]), head_sha="abc",
+        run_command=lambda a: calls.append(a) or "",
+        dry_run=False, pr_number="42", comment_out=out, comment_via="gh",
+    )
+    dest.publish_findings(_stale_result(section))
+    assert "param renamed" in out.read_text()                       # artifact written
+    assert calls == [["gh", "pr", "comment", "42", "--body", dest.flag_comment(_stale_result(section))]]  # gh fired
+    assert capsys.readouterr().out == ""                            # no stdout (posted)
+
+
 def test_build_fix_plan_commit_is_bot_authored(tmp_path):
     (tmp_path / "docs").mkdir()
     doc = tmp_path / "docs" / "auth.md"
