@@ -122,7 +122,11 @@ def test_build_fix_plan_groups_edits_and_routes(tmp_path):
     assert "username" in plan.file_writes["docs/auth.md"]
     # commands: git add, git commit, git push origin HEAD
     assert ["git", "add", "docs/auth.md"] in plan.commands
-    assert ["git", "commit", "-m", plan.commit_message] in plan.commands
+    assert [
+        "git", "-c", "user.name=docpulse[bot]",
+        "-c", "user.email=docpulse-bot@users.noreply.github.com",
+        "commit", "-m", plan.commit_message,
+    ] in plan.commands
     assert ["git", "push", "origin", "HEAD"] in plan.commands
     # no gh pr create or branch-checkout commands (doc-sync commit only)
     assert not any(c[:3] == ["gh", "pr", "create"] for c in plan.commands)
@@ -251,6 +255,57 @@ def test_publish_findings_live_posts_comment_to_pr():
     )
     dest.publish_findings(_stale_result(section))
     assert calls == [["gh", "pr", "comment", "42", "--body", dest.flag_comment(_stale_result(section))]]
+
+
+def test_publish_findings_writes_comment_out_file(tmp_path):
+    section = _section()
+    out = tmp_path / "flag.md"
+    dest = RepoMarkdownDestination(
+        root=Path("."), sections_by_id={section.id: section},
+        config=Config(docs=[DocGlob(path="**/*.md")]), head_sha="abc",
+        dry_run=True, comment_out=out,
+    )
+    dest.publish_findings(_stale_result(section))
+    assert "param renamed" in out.read_text()
+
+
+def test_publish_findings_comment_via_none_skips_gh():
+    section = _section()
+    calls = []
+    dest = RepoMarkdownDestination(
+        root=Path("."), sections_by_id={section.id: section},
+        config=Config(docs=[DocGlob(path="**/*.md")]), head_sha="abc",
+        run_command=lambda a: calls.append(a) or "",
+        dry_run=False, pr_number="42", comment_via="none",
+    )
+    dest.publish_findings(_stale_result(section))
+    assert calls == []  # gh never invoked when comment_via='none'
+
+
+def test_build_fix_plan_commit_is_bot_authored(tmp_path):
+    (tmp_path / "docs").mkdir()
+    doc = tmp_path / "docs" / "auth.md"
+    doc.write_text("# Login\n\nCall login with a user.\n")
+    section = parse_markdown("docs/auth.md", doc.read_text())[0]
+    dest = RepoMarkdownDestination(
+        root=tmp_path, sections_by_id={section.id: section},
+        config=Config(docs=[DocGlob(path="**/*.md")]), head_sha="abcdef1234567890",
+        bot_name="docpulse[bot]", bot_email="docpulse-bot@users.noreply.github.com",
+    )
+    result = RunResult(
+        verdicts=[Verdict(section_id=section.id, status="stale", confidence=0.95,
+                          diagnosis="renamed", evidence=[])],
+        repairs=[Repair(section_id=section.id,
+                        new_content="# Login\n\nCall login with a username.",
+                        confidence=0.95, validation_passed=True, rationale="r")],
+        suspects_checked=1, suspects_total=1, tokens_used=0, exit_code=1,
+    )
+    plan = dest.build_fix_plan(result)
+    assert [
+        "git", "-c", "user.name=docpulse[bot]",
+        "-c", "user.email=docpulse-bot@users.noreply.github.com",
+        "commit", "-m", plan.commit_message,
+    ] in plan.commands
 
 
 def test_publish_findings_live_without_pr_number_prints(capsys):
