@@ -11,10 +11,14 @@ def loop_guard(root: Path, bot_email: str) -> bool:
     push to avoid an endless loop (the pushed doc-sync would otherwise
     re-trigger DocPulse). False when there is no HEAD or git is unavailable.
     """
-    result = subprocess.run(
-        ["git", "log", "-1", "--format=%ae"],
-        cwd=root, capture_output=True, encoding="utf-8", errors="replace",
-    )
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%ae"],
+            cwd=root, capture_output=True, encoding="utf-8", errors="replace",
+            timeout=5,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
     if result.returncode != 0:
         return False
     return result.stdout.strip() == bot_email

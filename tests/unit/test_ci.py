@@ -1,6 +1,7 @@
 import subprocess
 from pathlib import Path
 
+import docpulse.ci as ci
 from docpulse.ci import loop_guard
 
 BOT = "docpulse-bot@users.noreply.github.com"
@@ -35,3 +36,11 @@ def test_loop_guard_false_when_no_commits(tmp_path):
     repo.mkdir()
     _git(repo, "init", "-q")
     assert loop_guard(repo, BOT) is False
+
+
+def test_loop_guard_false_when_git_unavailable(tmp_path, monkeypatch):
+    def boom(*args, **kwargs):
+        raise FileNotFoundError("git not found")
+
+    monkeypatch.setattr(ci.subprocess, "run", boom)
+    assert loop_guard(tmp_path, BOT) is False
