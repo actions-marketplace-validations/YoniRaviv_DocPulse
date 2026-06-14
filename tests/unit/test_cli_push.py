@@ -1,5 +1,6 @@
 import subprocess
 
+import pytest
 from typer.testing import CliRunner
 
 import docpulse.cli as cli_mod
@@ -7,6 +8,14 @@ from docpulse.cli import _bot_identity, _pr_number, app
 from docpulse.models import RunResult
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _stub_ci_prep(monkeypatch):
+    """CLI tests exercise wiring, not ci behavior (covered in test_ci.py).
+    Stub the subprocess-backed self-prep so these stay hermetic and fast."""
+    monkeypatch.setattr(cli_mod.ci, "ensure_safe_directory", lambda root: None)
+    monkeypatch.setattr(cli_mod.ci, "resolve_base_ref", lambda root, base: None)
 
 
 def test_pr_number_explicit_env():
@@ -148,6 +157,26 @@ def test_check_passes_comment_options_to_destination(tmp_path, monkeypatch):
     out = tmp_path / "flag.md"
     result = runner.invoke(app, [
         "check", "--base", "origin/main", "--root", str(repo),
+        "--comment-out", str(out), "--comment-via", "none",
+    ])
+    assert result.exit_code == 0, result.output
+    assert _FakeDest.last["comment_out"] == out
+    assert _FakeDest.last["comment_via"] == "none"
+
+
+def test_repair_passes_comment_options_to_destination(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    monkeypatch.setattr(cli_mod, "_build_destination", lambda **kw: _FakeDest(**kw))
+    monkeypatch.setattr(cli_mod, "LLMClient", lambda model: object())
+    monkeypatch.setattr(
+        cli_mod, "run_pipeline",
+        lambda *a, **k: RunResult(verdicts=[], repairs=[], suspects_checked=0,
+                                  suspects_total=0, tokens_used=0, exit_code=0),
+    )
+    monkeypatch.setattr(cli_mod, "GitContext", lambda *a, **k: type("C", (), {"get_intent": lambda self: ""})())
+    out = tmp_path / "flag.md"
+    result = runner.invoke(app, [
+        "repair", "--base", "origin/main", "--root", str(repo),
         "--comment-out", str(out), "--comment-via", "none",
     ])
     assert result.exit_code == 0, result.output

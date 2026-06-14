@@ -69,8 +69,8 @@ def _bot_identity(env: dict[str, str]) -> tuple[str, str]:
 
 def _build_destination(
     *, root: Path, sections_by_id, config, head_sha, dry_run, pr_number=None,
-    comment_out=None, comment_via="gh", bot_name="docpulse[bot]",
-    bot_email="docpulse-bot@users.noreply.github.com",
+    comment_out=None, comment_via="gh",
+    bot_name=_DEFAULT_BOT_NAME, bot_email=_DEFAULT_BOT_EMAIL,
 ):
     run_command = checked_runner(root) if not dry_run else None
     return RepoMarkdownDestination(
