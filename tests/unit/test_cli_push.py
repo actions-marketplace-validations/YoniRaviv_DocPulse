@@ -3,7 +3,7 @@ import subprocess
 from typer.testing import CliRunner
 
 import docpulse.cli as cli_mod
-from docpulse.cli import _pr_number, app
+from docpulse.cli import _bot_identity, _pr_number, app
 from docpulse.models import RunResult
 
 runner = CliRunner()
@@ -20,6 +20,20 @@ def test_pr_number_from_github_ref():
 
 def test_pr_number_none_when_absent():
     assert _pr_number({}) is None
+
+
+def test_bot_identity_defaults():
+    name, email = _bot_identity({})
+    assert name == "docpulse[bot]"
+    assert email == "docpulse-bot@users.noreply.github.com"
+
+
+def test_bot_identity_env_override():
+    name, email = _bot_identity(
+        {"DOCPULSE_BOT_NAME": "Custom Bot", "DOCPULSE_BOT_EMAIL": "bot@corp.test"}
+    )
+    assert name == "Custom Bot"
+    assert email == "bot@corp.test"
 
 
 class _FakeDest:

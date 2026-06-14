@@ -27,6 +27,10 @@ app = typer.Typer(
 )
 
 
+_DEFAULT_BOT_NAME = "docpulse[bot]"
+_DEFAULT_BOT_EMAIL = "docpulse-bot@users.noreply.github.com"
+
+
 @app.callback()
 def _main() -> None:
     """DocPulse — docs that stay in sync with the heartbeat of the codebase."""
@@ -49,6 +53,14 @@ def _pr_number(env: dict[str, str]) -> str | None:
         return explicit
     match = re.match(r"refs/pull/(\d+)/", env.get("GITHUB_REF", ""))
     return match.group(1) if match else None
+
+
+def _bot_identity(env: dict[str, str]) -> tuple[str, str]:
+    """(name, email) for the doc-sync commit + loop guard, from env or defaults."""
+    return (
+        env.get("DOCPULSE_BOT_NAME") or _DEFAULT_BOT_NAME,
+        env.get("DOCPULSE_BOT_EMAIL") or _DEFAULT_BOT_EMAIL,
+    )
 
 
 def _build_destination(
