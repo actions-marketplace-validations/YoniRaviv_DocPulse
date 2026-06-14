@@ -56,7 +56,10 @@ def _pr_number(env: dict[str, str]) -> str | None:
 
 
 def _bot_identity(env: dict[str, str]) -> tuple[str, str]:
-    """(name, email) for the doc-sync commit + loop guard, from env or defaults."""
+    """(name, email) for the doc-sync commit + loop guard, from env or defaults.
+
+    Each field falls back to its default independently.
+    """
     return (
         env.get("DOCPULSE_BOT_NAME") or _DEFAULT_BOT_NAME,
         env.get("DOCPULSE_BOT_EMAIL") or _DEFAULT_BOT_EMAIL,

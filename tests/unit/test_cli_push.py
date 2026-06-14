@@ -36,6 +36,12 @@ def test_bot_identity_env_override():
     assert email == "bot@corp.test"
 
 
+def test_bot_identity_partial_override():
+    name, email = _bot_identity({"DOCPULSE_BOT_NAME": "MyBot"})
+    assert name == "MyBot"
+    assert email == "docpulse-bot@users.noreply.github.com"
+
+
 class _FakeDest:
     last = None
 
